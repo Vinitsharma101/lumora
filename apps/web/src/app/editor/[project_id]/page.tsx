@@ -16,6 +16,7 @@ import { Onboarding } from "@/components/editor/onboarding";
 import { MigrationDialog } from "@/components/editor/dialogs/migration-dialog";
 import { AIChatPanel } from "@/components/editor/panels/ai-chat";
 import { usePanelStore } from "@/stores/panel-store";
+import { useAIChatStore } from "@/stores/ai-chat-store";
 import { usePasteMedia } from "@/hooks/use-paste-media";
 
 export default function Editor() {
@@ -31,7 +32,6 @@ export default function Editor() {
 				</div>
 				<Onboarding />
 				<MigrationDialog />
-				<AIChatPanel />
 			</div>
 		</EditorProvider>
 	);
@@ -40,9 +40,11 @@ export default function Editor() {
 function EditorLayout() {
 	usePasteMedia();
 	const { panels, setPanel } = usePanelStore();
+	const isPanelOpen = useAIChatStore((state) => state.isPanelOpen);
 
-	return (
+	const mainContent = (
 		<ResizablePanelGroup
+			id="editor-vertical"
 			direction="vertical"
 			className="size-full gap-[0.18rem]"
 			onLayout={(sizes) => {
@@ -51,12 +53,14 @@ function EditorLayout() {
 			}}
 		>
 			<ResizablePanel
+				id="main-content"
 				defaultSize={panels.mainContent}
 				minSize={30}
 				maxSize={85}
 				className="min-h-0"
 			>
 				<ResizablePanelGroup
+					id="editor-horizontal"
 					direction="horizontal"
 					className="size-full gap-[0.19rem] px-3"
 					onLayout={(sizes) => {
@@ -66,6 +70,7 @@ function EditorLayout() {
 					}}
 				>
 					<ResizablePanel
+						id="tools"
 						defaultSize={panels.tools}
 						minSize={15}
 						maxSize={40}
@@ -77,6 +82,7 @@ function EditorLayout() {
 					<ResizableHandle withHandle />
 
 					<ResizablePanel
+						id="preview"
 						defaultSize={panels.preview}
 						minSize={30}
 						className="min-h-0 min-w-0 flex-1"
@@ -87,6 +93,7 @@ function EditorLayout() {
 					<ResizableHandle withHandle />
 
 					<ResizablePanel
+						id="properties"
 						defaultSize={panels.properties}
 						minSize={15}
 						maxSize={40}
@@ -100,12 +107,46 @@ function EditorLayout() {
 			<ResizableHandle withHandle />
 
 			<ResizablePanel
+				id="timeline"
 				defaultSize={panels.timeline}
 				minSize={15}
 				maxSize={70}
 				className="min-h-0 px-3 pb-3"
 			>
 				<Timeline />
+			</ResizablePanel>
+		</ResizablePanelGroup>
+	);
+
+	if (!isPanelOpen) {
+		return mainContent;
+	}
+
+	return (
+		<ResizablePanelGroup
+			id="editor-with-ai"
+			direction="horizontal"
+			className="size-full"
+			onLayout={(sizes) => {
+				if (sizes[1] !== undefined) {
+					setPanel("aiChat", sizes[1]);
+				}
+			}}
+		>
+			<ResizablePanel id="editor-main" defaultSize={100 - panels.aiChat} minSize={50} className="min-w-0">
+				{mainContent}
+			</ResizablePanel>
+
+			<ResizableHandle withHandle />
+
+			<ResizablePanel
+				id="ai-chat"
+				defaultSize={panels.aiChat}
+				minSize={15}
+				maxSize={40}
+				className="min-w-0 pb-3 pr-3"
+			>
+				<AIChatPanel />
 			</ResizablePanel>
 		</ResizablePanelGroup>
 	);

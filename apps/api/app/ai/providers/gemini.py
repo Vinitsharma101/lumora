@@ -62,15 +62,24 @@ def _to_gemini_contents(messages: list[AIMessage]) -> list[dict]:
         role = "model" if msg.role == "assistant" else "user"
 
         if msg.role == "user" and msg.toolResults:
-            parts = [
-                {
-                    "function_response": {
-                        "name": tr.toolCallId,
-                        "response": {"result": tr.content},
+            parts = []
+            for tr in msg.toolResults:
+                # Find the matching tool call name from previous messages
+                func_name = tr.toolCallId
+                for prev_msg in messages:
+                    if prev_msg.role == "assistant" and prev_msg.toolCalls:
+                        for tc in prev_msg.toolCalls:
+                            if tc.id == tr.toolCallId:
+                                func_name = tc.name
+                                break
+                parts.append(
+                    {
+                        "function_response": {
+                            "name": func_name,
+                            "response": {"result": tr.content},
+                        }
                     }
-                }
-                for tr in msg.toolResults
-            ]
+                )
             contents.append({"role": "user", "parts": parts})
             continue
 

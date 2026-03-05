@@ -43,7 +43,7 @@ export function useAIChat() {
 					toolCalls: m.toolCalls?.map((tc) => ({
 						id: tc.id,
 						name: tc.name,
-						arguments: {},
+						arguments: tc.result ? { result: tc.result } : {},
 					})),
 				}));
 

@@ -342,32 +342,32 @@ export const AI_TOOLS: ToolDefinition[] = [
 		},
 	},
 
-	// ── Motion Graphics (Remotion) ──
+	// ── Motion Graphics ──
 	{
 		name: "add_motion_graphic",
 		description:
-			"Render a motion graphic from a template and add it to the timeline.",
+			"Render a Remotion motion graphic (animated overlay) and add it to the timeline as a video element. Available compositions: lower-third, title-card, subscribe-cta, countdown, text-reveal.",
 		parameters: {
 			type: "object",
 			properties: {
 				compositionId: {
 					type: "string",
-					enum: [
-						"lower-third",
-						"title-card",
-						"subscribe-cta",
-						"countdown",
-						"text-reveal",
-					],
-					description: "Motion graphic template ID",
+					enum: ["lower-third", "title-card", "subscribe-cta", "countdown", "text-reveal"],
+					description: "The motion graphic template to render",
 				},
 				props: {
 					type: "object",
 					description:
-						"Template-specific properties (text, colors, etc.)",
+						"Props for the composition. lower-third: {primaryText, secondaryText?, accentColor?}. title-card: {title, subtitle?, background?, textColor?}. subscribe-cta: {channelName?, accentColor?}. countdown: {from?, color?, background?}. text-reveal: {text, color?, background?, fontSize?}.",
 				},
-				startTime: { type: "number", description: "Start time on timeline (seconds)" },
-				duration: { type: "number", description: "Duration in seconds" },
+				startTime: {
+					type: "number",
+					description: "Start time on timeline in seconds",
+				},
+				duration: {
+					type: "number",
+					description: "Duration in seconds (default: 5)",
+				},
 			},
 			required: ["compositionId", "startTime"],
 		},

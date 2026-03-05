@@ -11,6 +11,11 @@ import { StickersView } from "./views/stickers";
 import { TextView } from "./views/text";
 import { EffectsView } from "./views/effects";
 import { TransitionsView } from "./views/transitions";
+import { FiltersView } from "./views/filters";
+import { AdjustmentView } from "./views/adjustment";
+import { AIGenerateView } from "./views/ai-generate";
+import { AutoEditView } from "./views/auto-edit";
+import { CollaborateView } from "./views/collaborate";
 
 export function AssetsPanel() {
 	const { activeTab } = useAssetsPanelStore();
@@ -23,16 +28,11 @@ export function AssetsPanel() {
 		effects: <EffectsView />,
 		transitions: <TransitionsView />,
 		captions: <Captions />,
-		filters: (
-			<div className="text-muted-foreground p-4">
-				Filters view coming soon...
-			</div>
-		),
-		adjustment: (
-			<div className="text-muted-foreground p-4">
-				Adjustment view coming soon...
-			</div>
-		),
+		filters: <FiltersView />,
+		adjustment: <AdjustmentView />,
+		"ai-generate": <AIGenerateView />,
+		"auto-edit": <AutoEditView />,
+		collaborate: <CollaborateView />,
 		settings: <SettingsView />,
 	};
 

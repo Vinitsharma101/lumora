@@ -33,6 +33,12 @@ GUIDELINES FOR TEXT/CAPTIONS:
 - Center-align text by default unless there's reason not to
 - Use white text (#ffffff) with dark background for readability
 - Position captions in the lower third of the screen (y: 0.3 to 0.4 in transform)
+- For title cards, use add_motion_graphic with "title-card" composition for animated titles, or add_text_caption for static titles
+- For lower-thirds, use add_motion_graphic with "lower-third" composition for animated lower-thirds, or add_text_caption for static ones
+- For subscribe CTAs or end cards, use add_motion_graphic with "subscribe-cta" for animated overlays, or add_text_caption for static text
+- For countdowns, use add_motion_graphic with "countdown" composition
+- For cinematic text reveals, use add_motion_graphic with "text-reveal" composition
+- Use list_motion_templates to show available motion graphic templates when the user asks
 
 GUIDELINES FOR TIMING:
 - Title cards: 3-5 seconds

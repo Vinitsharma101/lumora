@@ -22,6 +22,21 @@ export interface ChatMessage {
 	createdAt: Date;
 }
 
+export interface AIPendingContext {
+	elements: Array<{
+		id: string;
+		name: string;
+		type: string;
+		startTime: number;
+		duration: number;
+		trackId: string;
+		trackType: string;
+		mediaId?: string;
+		content?: string;
+	}>;
+	selectionRange?: { start: number; end: number };
+}
+
 interface AIChatState {
 	isPanelOpen: boolean;
 	selectedProvider: AIProvider;
@@ -29,6 +44,7 @@ interface AIChatState {
 	messages: ChatMessage[];
 	isStreaming: boolean;
 	error: string | null;
+	pendingContext: AIPendingContext | null;
 
 	togglePanel: () => void;
 	openPanel: () => void;
@@ -40,6 +56,8 @@ interface AIChatState {
 	clearMessages: () => void;
 	setStreaming: (streaming: boolean) => void;
 	setError: (error: string | null) => void;
+	setPendingContext: (context: AIPendingContext | null) => void;
+	clearPendingContext: () => void;
 }
 
 export const useAIChatStore = create<AIChatState>()(
@@ -51,6 +69,7 @@ export const useAIChatStore = create<AIChatState>()(
 			messages: [],
 			isStreaming: false,
 			error: null,
+			pendingContext: null,
 
 			togglePanel: () =>
 				set((state) => ({ isPanelOpen: !state.isPanelOpen })),
@@ -73,6 +92,8 @@ export const useAIChatStore = create<AIChatState>()(
 				set({ messages: [], currentSessionId: null, error: null }),
 			setStreaming: (streaming) => set({ isStreaming: streaming }),
 			setError: (error) => set({ error }),
+			setPendingContext: (context) => set({ pendingContext: context }),
+			clearPendingContext: () => set({ pendingContext: null }),
 		}),
 		{
 			name: "ai-chat-settings",

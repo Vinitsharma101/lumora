@@ -67,6 +67,13 @@ services:
       - SUNO_API_URL=${SUNO_API_URL:-}
       - PEXELS_API_KEY=${PEXELS_API_KEY:-}
       - PIXABAY_API_KEY=${PIXABAY_API_KEY:-}
+      # Cloud platform
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -78,6 +85,32 @@ services:
       timeout: 10s
       retries: 5
       start_period: 10s
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["arq", "app.worker.WorkerSettings"]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://opencut:opencut@db:5432/opencut
+      - JWT_SECRET=your-production-secret-key-here
+      - REDIS_URL=redis://redis:6379
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - REPLICATE_API_TOKEN=${REPLICATE_API_TOKEN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   web:
     build:

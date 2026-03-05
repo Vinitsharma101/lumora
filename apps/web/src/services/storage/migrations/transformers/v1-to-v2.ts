@@ -450,10 +450,12 @@ function transformTextTrack({
 					value: textElement.color,
 					fallback: "#000000",
 				}),
-				backgroundColor: getStringValue({
-					value: textElement.backgroundColor,
-					fallback: "#FFFFFF",
-				}),
+				background: {
+					color: getStringValue({
+						value: textElement.backgroundColor,
+						fallback: "transparent",
+					}) || "transparent"
+				},
 				textAlign: (getStringValue({
 					value: textElement.textAlign,
 					fallback: "left",

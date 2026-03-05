@@ -1,7 +1,19 @@
 import type { CanvasRenderer } from "../canvas-renderer";
 import { BaseNode } from "./base-node";
 import type { BlendMode } from "@/types/rendering";
-import type { Transform } from "@/types/timeline";
+import type { Transform, Effect, Transition } from "@/types/timeline";
+import {
+	buildFilterString,
+	computeEffectOpacity,
+	computeEffectTransform,
+	applyOverlayEffects,
+	isOverlayEffect,
+} from "@/lib/effects/effects-engine";
+import {
+	computeTransitions,
+	renderFlashOverlay,
+	renderGlitchOverlay,
+} from "@/lib/effects/transitions-engine";
 
 const VISUAL_EPSILON = 1 / 1000;
 
@@ -13,13 +25,8 @@ export interface VisualNodeParams {
 	transform: Transform;
 	opacity: number;
 	blendMode?: BlendMode;
-	effects?: { id: string; type: string; intensity: number }[];
-	transitions?: {
-		id: string;
-		type: string;
-		duration: number;
-		direction: "in" | "out";
-	}[];
+	effects?: Effect[];
+	transitions?: Transition[];
 }
 
 export abstract class VisualNode<
@@ -53,78 +60,136 @@ export abstract class VisualNode<
 		renderer.context.save();
 
 		const { transform, opacity } = this.params;
+		const localTime = time !== undefined ? this.getLocalTime(time) : this.params.trimStart;
+		const effectTime = localTime - this.params.trimStart;
+
+		// ── Base geometry ──
 		const containScale = Math.min(
 			renderer.width / sourceWidth,
 			renderer.height / sourceHeight,
 		);
-		const scaledWidth = sourceWidth * containScale * transform.scale;
-		const scaledHeight = sourceHeight * containScale * transform.scale;
-		const x = renderer.width / 2 + transform.position.x - scaledWidth / 2;
-		const y = renderer.height / 2 + transform.position.y - scaledHeight / 2;
+		let scaledWidth = sourceWidth * containScale * transform.scale;
+		let scaledHeight = sourceHeight * containScale * transform.scale;
+		let offsetX = 0;
+		let offsetY = 0;
+		let rotateOffset = 0;
 
+		// ── Blend mode ──
 		renderer.context.globalCompositeOperation = (
 			this.params.blendMode && this.params.blendMode !== "normal"
 				? this.params.blendMode
 				: "source-over"
 		) as GlobalCompositeOperation;
-		
+
 		let currentOpacity = opacity;
 
-		// Handle Transitions
-		if (this.params.transitions && time !== undefined) {
-			const localTime = this.getLocalTime(time);
-			for (const transition of this.params.transitions) {
-				if (transition.type === "fade") {
-					if (transition.direction === "in") {
-						const fadeEndTime = this.params.trimStart + transition.duration;
-						if (localTime < fadeEndTime) {
-							const progress = Math.max(0, (localTime - this.params.trimStart) / transition.duration);
-							currentOpacity *= progress;
-						}
-					} else if (transition.direction === "out") {
-						const fadeStartTime = this.params.trimStart + this.params.duration - transition.duration;
-						if (localTime > fadeStartTime) {
-							const progress = Math.max(0, (this.params.trimStart + this.params.duration - localTime) / transition.duration);
-							currentOpacity *= progress;
-						}
-					}
-				}
-			}
-		}
-
-		renderer.context.globalAlpha = currentOpacity;
-
-		// Handle Effects (Filters)
+		// ── Effects: transform modifications ──
 		if (this.params.effects && this.params.effects.length > 0) {
-			const filters: string[] = [];
-			for (const effect of this.params.effects) {
-				if (effect.type === "blur") {
-					filters.push(`blur(${effect.intensity * 20}px)`);
-				} else if (effect.type === "grayscale") {
-					filters.push(`grayscale(${effect.intensity * 100}%)`);
-				} else if (effect.type === "sepia") {
-					filters.push(`sepia(${effect.intensity * 100}%)`);
-				} else if (effect.type === "brightness") {
-					// 0.5 intensity = 100% brightness (normal).
-					filters.push(`brightness(${effect.intensity * 200}%)`);
-				} else if (effect.type === "contrast") {
-					filters.push(`contrast(${effect.intensity * 200}%)`);
-				}
-			}
-			if (filters.length > 0) {
-				renderer.context.filter = filters.join(" ");
+			const effectTransform = computeEffectTransform(
+				this.params.effects,
+				effectTime,
+				this.params.duration,
+			);
+			scaledWidth *= effectTransform.scaleMultiplier;
+			scaledHeight *= effectTransform.scaleMultiplier;
+			offsetX += effectTransform.translateX;
+			offsetY += effectTransform.translateY;
+			rotateOffset += effectTransform.rotateOffset;
+
+			// Apply effect-driven opacity changes
+			currentOpacity *= computeEffectOpacity(
+				this.params.effects,
+				effectTime,
+				this.params.duration,
+			);
+		}
+
+		// ── Transitions: opacity + transform modifications ──
+		let transitionFlash = 0;
+		let transitionGlitch = 0;
+
+		if (this.params.transitions && this.params.transitions.length > 0 && time !== undefined) {
+			const transResult = computeTransitions(
+				this.params.transitions,
+				localTime,
+				this.params.trimStart,
+				this.params.duration,
+			);
+			currentOpacity *= transResult.opacity;
+			scaledWidth *= transResult.scaleMultiplier;
+			scaledHeight *= transResult.scaleMultiplier;
+			offsetX += transResult.translateX;
+			offsetY += transResult.translateY;
+			rotateOffset += transResult.rotateOffset;
+			transitionFlash = transResult.flashOverlay;
+			transitionGlitch = transResult.glitchOffset;
+
+			// Transition blur adds to effect filters
+			if (transResult.blurAmount > 0) {
+				const existingFilter = renderer.context.filter === "none" ? "" : renderer.context.filter;
+				renderer.context.filter = `${existingFilter} blur(${transResult.blurAmount}px)`.trim();
 			}
 		}
 
-		if (transform.rotate !== 0) {
+		renderer.context.globalAlpha = Math.max(0, Math.min(1, currentOpacity));
+
+		// ── Effects: CSS filter string ──
+		if (this.params.effects && this.params.effects.length > 0) {
+			const filterString = buildFilterString(this.params.effects);
+			if (filterString) {
+				const existing = renderer.context.filter === "none" ? "" : renderer.context.filter;
+				renderer.context.filter = `${existing} ${filterString}`.trim();
+			}
+		}
+
+		// ── Compute final position ──
+		const x = renderer.width / 2 + transform.position.x + offsetX - scaledWidth / 2;
+		const y = renderer.height / 2 + transform.position.y + offsetY - scaledHeight / 2;
+
+		// ── Rotation (base + effect + transition) ──
+		const totalRotation = transform.rotate + rotateOffset;
+		if (totalRotation !== 0) {
 			const centerX = x + scaledWidth / 2;
 			const centerY = y + scaledHeight / 2;
 			renderer.context.translate(centerX, centerY);
-			renderer.context.rotate((transform.rotate * Math.PI) / 180);
+			renderer.context.rotate((totalRotation * Math.PI) / 180);
 			renderer.context.translate(-centerX, -centerY);
 		}
 
+		// ── Draw the source ──
 		renderer.context.drawImage(source, x, y, scaledWidth, scaledHeight);
+
+		// ── Post-processing: overlay effects ──
+		if (this.params.effects && this.params.effects.length > 0) {
+			// Reset filter for overlays (they draw raw)
+			renderer.context.filter = "none";
+			renderer.context.globalAlpha = 1;
+
+			for (const effect of this.params.effects) {
+				if (isOverlayEffect(effect.type)) {
+					applyOverlayEffects({
+						renderer,
+						effect,
+						time: effectTime,
+						localTime,
+						duration: this.params.duration,
+						x,
+						y,
+						width: scaledWidth,
+						height: scaledHeight,
+					});
+				}
+			}
+		}
+
+		// ── Post-processing: transition overlays ──
+		if (transitionFlash > 0) {
+			renderFlashOverlay(renderer.context, transitionFlash, x, y, scaledWidth, scaledHeight);
+		}
+		if (transitionGlitch > 0) {
+			renderGlitchOverlay(renderer.context, transitionGlitch, x, y, scaledWidth, scaledHeight);
+		}
+
 		renderer.context.restore();
 	}
 }

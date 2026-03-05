@@ -142,6 +142,10 @@ export const ACTIONS = {
 		category: "controls",
 		defaultShortcuts: ["ctrl+shift+a"],
 	},
+	"ask-ai-about-selection": {
+		description: "Ask AI about selected elements",
+		category: "editing",
+	},
 } as const satisfies Record<string, TActionDefinition>;
 
 export type TAction = keyof typeof ACTIONS;

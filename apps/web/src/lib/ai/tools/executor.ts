@@ -573,7 +573,8 @@ export async function executeToolCall(
 				const startTime = args.startTime as number;
 				const duration = (args.duration as number) ?? 5;
 
-				const response = await apiFetch("/api/ai/render-motion", {
+				// Call the Next.js API route (server-side Remotion rendering)
+				const response = await fetch("/api/render-motion", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({

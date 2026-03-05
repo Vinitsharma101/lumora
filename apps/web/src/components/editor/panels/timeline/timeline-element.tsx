@@ -42,10 +42,13 @@ import {
 	VolumeMute02Icon,
 	Search01Icon,
 	Exchange01Icon,
+	AiBrainIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { uppercase } from "@/utils/string";
 import type { ComponentProps } from "react";
+import { useAIChatStore } from "@/stores/ai-chat-store";
+import type { AIPendingContext } from "@/stores/ai-chat-store";
 
 function getDisplayShortcut(action: TAction) {
 	const { defaultShortcuts } = getActionDefinition(action);
@@ -134,6 +137,66 @@ export function TimelineElement({
 		}
 	};
 
+	const handleAskAI = (event: React.MouseEvent) => {
+		event.stopPropagation();
+
+		// Build context from selected elements (or just this one)
+		const elementsToSend =
+			selectedElements.length > 0
+				? selectedElements
+				: [{ elementId: element.id, trackId: track.id }];
+
+		const tracks = editor.timeline.getTracks();
+		const contextElements: AIPendingContext["elements"] = [];
+
+		for (const sel of elementsToSend) {
+			const selTrack = tracks.find((t) => t.id === sel.trackId);
+			if (!selTrack) continue;
+			const selElement = selTrack.elements.find(
+				(el) => el.id === sel.elementId,
+			);
+			if (!selElement) continue;
+
+			const entry: AIPendingContext["elements"][number] = {
+				id: selElement.id,
+				name: selElement.name,
+				type: selElement.type,
+				startTime: selElement.startTime,
+				duration: selElement.duration,
+				trackId: selTrack.id,
+				trackType: selTrack.type,
+			};
+
+			if ("mediaId" in selElement) {
+				entry.mediaId = selElement.mediaId;
+			}
+			if (selElement.type === "text") {
+				entry.content = selElement.content;
+			}
+
+			contextElements.push(entry);
+		}
+
+		// Calculate selection time range
+		let minStart = Number.POSITIVE_INFINITY;
+		let maxEnd = 0;
+		for (const ctx of contextElements) {
+			if (ctx.startTime < minStart) minStart = ctx.startTime;
+			const end = ctx.startTime + ctx.duration;
+			if (end > maxEnd) maxEnd = end;
+		}
+
+		const store = useAIChatStore.getState();
+		store.setPendingContext({
+			elements: contextElements,
+			selectionRange:
+				contextElements.length > 0
+					? { start: minStart, end: maxEnd }
+					: undefined,
+		});
+		store.openPanel();
+	};
+
 	const isMuted = canElementHaveAudio(element) && element.muted === true;
 
 	return (
@@ -209,6 +272,14 @@ export function TimelineElement({
 						</ContextMenuItem>
 					</>
 				)}
+				<ContextMenuSeparator />
+				<ContextMenuItem
+					icon={<HugeiconsIcon icon={AiBrainIcon} />}
+					onClick={handleAskAI}
+					className="text-purple-400"
+				>
+					Ask AI
+				</ContextMenuItem>
 				<ContextMenuSeparator />
 				<DeleteMenuItem
 					isMultipleSelected={selectedElements.length > 1}

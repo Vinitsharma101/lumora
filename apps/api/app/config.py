@@ -33,6 +33,21 @@ class Settings(BaseSettings):
     PEXELS_API_KEY: str | None = None
     PIXABAY_API_KEY: str | None = None
 
+    # Supabase
+    SUPABASE_URL: str | None = None
+    SUPABASE_SERVICE_KEY: str | None = None
+    SUPABASE_ANON_KEY: str | None = None
+
+    # Google Cloud AI (API-based, no local models)
+    GOOGLE_CLOUD_PROJECT: str | None = None
+    GOOGLE_CLOUD_LOCATION: str = "us-central1"
+
+    # Replicate (API-based AI models)
+    REPLICATE_API_TOKEN: str | None = None
+
+    # OpenAI Sora (video generation)
+    # Uses the same OPENAI_API_KEY above
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]

@@ -63,6 +63,7 @@ import {
 import { DeleteProjectDialog } from "@/components/editor/dialogs/delete-project-dialog";
 import { ProjectInfoDialog } from "@/components/editor/dialogs/project-info-dialog";
 import { RenameProjectDialog } from "@/components/editor/dialogs/rename-project-dialog";
+import { ProjectCreationChat } from "@/components/editor/project-creation-chat";
 import { cn } from "@/utils/ui";
 
 const formatProjectDuration = ({
@@ -108,6 +109,9 @@ export default function ProjectsPage() {
 			<ProjectsHeader />
 			<ProjectsToolbar projectIds={projectsToDisplay.map((p) => p.id)} />
 			<main className="mx-auto px-4 pt-2 pb-6 flex flex-col gap-4">
+				<div className="py-8 w-full flex justify-center">
+					<ProjectCreationChat />
+				</div>
 				{isLoading || !isInitialized ? (
 					<ProjectsSkeleton />
 				) : projectsToDisplay.length === 0 ? (

@@ -11,6 +11,9 @@ import {
 	Settings01Icon,
 	SlidersHorizontalIcon,
 	ColorsIcon,
+	AiBrainIcon,
+	Scissor01Icon,
+	Share01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
@@ -24,6 +27,9 @@ export const TAB_KEYS = [
 	"captions",
 	"filters",
 	"adjustment",
+	"ai-generate",
+	"auto-edit",
+	"collaborate",
 	"settings",
 ] as const;
 
@@ -71,6 +77,18 @@ export const tabs = {
 	adjustment: {
 		icon: createHugeiconsIcon({ icon: SlidersHorizontalIcon }),
 		label: "Adjustment",
+	},
+	"ai-generate": {
+		icon: createHugeiconsIcon({ icon: AiBrainIcon }),
+		label: "AI Generate",
+	},
+	"auto-edit": {
+		icon: createHugeiconsIcon({ icon: Scissor01Icon }),
+		label: "Auto-Edit",
+	},
+	collaborate: {
+		icon: createHugeiconsIcon({ icon: Share01Icon }),
+		label: "Collaborate",
 	},
 	settings: {
 		icon: createHugeiconsIcon({ icon: Settings01Icon }),

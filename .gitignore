@@ -13,5 +13,12 @@ node_modules
 # cursor
 bun.lockb
 
+# Python
+__pycache__/
+*.pyc
+
+# TypeScript
+*.tsbuildinfo
+
 # Twiggy
 .cursor/rules/file-structure.mdc

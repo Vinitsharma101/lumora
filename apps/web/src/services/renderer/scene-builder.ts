@@ -57,21 +57,26 @@ export function buildScene(params: BuildSceneParams) {
 					continue;
 				}
 
+				// Extract shared properties before media-type narrowing
+				const sharedVisualParams = {
+					duration: element.duration,
+					timeOffset: element.startTime,
+					trimStart: element.trimStart,
+					trimEnd: element.trimEnd,
+					transform: element.transform,
+					opacity: element.opacity,
+					blendMode: element.blendMode,
+					effects: element.effects,
+					transitions: element.transitions,
+				};
+
 				if (mediaAsset.type === "video") {
 					contentNodes.push(
 						new VideoNode({
 							mediaId: mediaAsset.id,
 							url: mediaAsset.url,
 							file: mediaAsset.file,
-							duration: element.duration,
-							timeOffset: element.startTime,
-							trimStart: element.trimStart,
-							trimEnd: element.trimEnd,
-							transform: element.transform,
-							opacity: element.opacity,
-							blendMode: element.blendMode,
-							effects: element.effects,
-							transitions: element.transitions,
+							...sharedVisualParams,
 						}),
 					);
 				}
@@ -79,15 +84,7 @@ export function buildScene(params: BuildSceneParams) {
 					contentNodes.push(
 						new ImageNode({
 							url: mediaAsset.url,
-							duration: element.duration,
-							timeOffset: element.startTime,
-							trimStart: element.trimStart,
-							trimEnd: element.trimEnd,
-							transform: element.transform,
-							opacity: element.opacity,
-							blendMode: element.blendMode,
-							effects: element.effects,
-							transitions: element.transitions,
+							...sharedVisualParams,
 							...(params.isPreview && {
 								maxSourceSize: PREVIEW_MAX_IMAGE_SIZE,
 							}),

@@ -73,6 +73,21 @@ export interface LibraryAudioElement extends BaseAudioElement {
 
 export type AudioElement = UploadAudioElement | LibraryAudioElement;
 
+export interface Effect {
+	id: string;
+	type: string;
+	intensity?: number;
+	[key: string]: any;
+}
+
+export interface Transition {
+	id: string;
+	type: string;
+	duration: number;
+	direction: "in" | "out";
+	[key: string]: any;
+}
+
 interface BaseTimelineElement {
 	id: string;
 	name: string;
@@ -80,6 +95,8 @@ interface BaseTimelineElement {
 	startTime: number;
 	trimStart: number;
 	trimEnd: number;
+	effects?: Effect[];
+	transitions?: Transition[];
 }
 
 export interface VideoElement extends BaseTimelineElement {

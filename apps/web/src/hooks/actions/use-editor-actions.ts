@@ -319,4 +319,74 @@ export function useEditorActions() {
 		},
 		undefined,
 	);
+
+	useActionHandler(
+		"ask-ai-about-selection",
+		() => {
+			const selectedElements = editor.timeline.getSelectedElements();
+			if (selectedElements.length === 0) return;
+
+			const tracks = editor.timeline.getTracks();
+			const elements: Array<{
+				id: string;
+				name: string;
+				type: string;
+				startTime: number;
+				duration: number;
+				trackId: string;
+				trackType: string;
+				mediaId?: string;
+				content?: string;
+			}> = [];
+
+			for (const selectedId of selectedElements) {
+				for (const track of tracks) {
+					const found = track.elements.find(
+						(element) => element.id === selectedId,
+					);
+					if (found) {
+						elements.push({
+							id: found.id,
+							name: found.name,
+							type: found.type,
+							startTime: found.startTime,
+							duration: found.duration,
+							trackId: track.id,
+							trackType: track.type,
+							mediaId:
+								"mediaId" in found
+									? (found.mediaId as string)
+									: undefined,
+							content:
+								"content" in found
+									? (found.content as string)
+									: undefined,
+						});
+						break;
+					}
+				}
+			}
+
+			if (elements.length === 0) return;
+
+			let selectionRange: { start: number; end: number } | undefined;
+			if (elements.length > 1) {
+				const starts = elements.map((element) => element.startTime);
+				const ends = elements.map(
+					(element) => element.startTime + element.duration,
+				);
+				selectionRange = {
+					start: Math.min(...starts),
+					end: Math.max(...ends),
+				};
+			}
+
+			useAIChatStore.getState().setPendingContext({
+				elements,
+				selectionRange,
+			});
+			useAIChatStore.getState().openPanel();
+		},
+		undefined,
+	);
 }

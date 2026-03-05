@@ -1,6 +1,7 @@
 import json
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from app.ai.providers import get_api_key_for_provider, get_provider
@@ -22,7 +23,10 @@ async def ai_chat(body: ChatRequest, request: Request):
         google_key=settings.GOOGLE_AI_API_KEY,
     )
     if not api_key:
-        return {"error": f"No API key configured for {body.provider}. Set the corresponding environment variable."}
+        return JSONResponse(
+            {"error": f"No API key configured for {body.provider}. Set the corresponding environment variable."},
+            status_code=400,
+        )
 
     provider = get_provider(body.provider, api_key)
 

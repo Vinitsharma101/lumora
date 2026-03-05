@@ -1,7 +1,7 @@
 [project]
 name = "opencut-api"
-version = "0.1.0"
-description = "OpenCut FastAPI backend"
+version = "0.2.0"
+description = "OpenCut FastAPI backend — AI video platform"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
@@ -17,6 +17,16 @@ dependencies = [
     "anthropic>=0.39.0",
     "openai>=1.55.0",
     "google-generativeai>=0.8.0",
+    # Supabase storage
+    "supabase>=2.0.0",
+    # Background job queue
+    "arq>=0.26.0",
+    # AI services (all API-based, no local models)
+    "replicate>=0.25.0",
+    # WebSocket collaboration
+    "websockets>=12.0",
+    # Google Cloud AI
+    "google-cloud-aiplatform>=1.40.0",
 ]
 
 [project.optional-dependencies]
