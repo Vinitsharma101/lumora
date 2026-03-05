@@ -1,46 +1,78 @@
 "use client";
 
 import { Button } from "../ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Star } from "lucide-react";
 import Image from "next/image";
 import { Handlebars } from "./handlebars";
 import Link from "next/link";
+import { motion } from "motion/react";
+import { SOCIAL_LINKS } from "@/constants/site-constants";
 
 export function Hero() {
 	return (
-		<div className="flex min-h-[calc(100svh-4.5rem)] flex-col items-center justify-between px-4 text-center">
-			<Image
-				className="absolute top-0 left-0 -z-50 size-full object-cover opacity-85 invert dark:invert-0"
-				src="/landing-page-dark.png"
-				height={1903.5}
-				width={1269}
-				alt="OpenCut video editor landing page background"
-			/>
-			<div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center">
-				<div className="inline-block text-4xl font-bold tracking-tighter md:text-[4rem]">
+		<div className="relative flex flex-col items-center px-6 pt-32 pb-16 text-center md:pt-40 md:pb-24">
+			<motion.div
+				initial={{ opacity: 0, y: 20 }}
+				animate={{ opacity: 1, y: 0 }}
+				transition={{ duration: 0.6, ease: "easeOut" }}
+				className="mx-auto flex w-full max-w-4xl flex-col items-center"
+			>
+				<div className="inline-block text-5xl font-bold tracking-tighter md:text-7xl">
 					<h1>The open source</h1>
 					<Handlebars>Video editor</Handlebars>
 				</div>
 
-				<p className="text-muted-foreground mx-auto mt-10 max-w-xl text-base font-light tracking-wide sm:text-xl">
-					A simple but powerful video editor that gets the job done. Works on
-					any platform.
+				<p className="text-muted-foreground mx-auto mt-8 max-w-2xl text-lg font-light tracking-wide md:text-xl">
+					Go from raw footage to a clean, publish-ready edit in minutes.
+					Free, open source, and runs in your browser.
 				</p>
 
-				<div className="mt-8 flex justify-center gap-8">
+				<div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
 					<Link href="/projects">
 						<Button
 							variant="foreground"
-							type="submit"
 							size="lg"
-							className="h-11 text-base"
+							className="h-12 px-8 text-base"
 						>
-							Try early beta
-							<ArrowRight className="ml-0.5" />
+							Get started
+							<ArrowRight className="ml-1 size-4" />
+						</Button>
+					</Link>
+					<Link
+						href={SOCIAL_LINKS.github}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						<Button
+							variant="outline"
+							size="lg"
+							className="h-12 px-8 text-base"
+						>
+							<Star className="mr-1 size-4" />
+							Star on GitHub
 						</Button>
 					</Link>
 				</div>
-			</div>
+			</motion.div>
+
+			<motion.div
+				initial={{ opacity: 0, y: 40 }}
+				animate={{ opacity: 1, y: 0 }}
+				transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
+				className="relative mt-16 w-full max-w-5xl md:mt-24"
+			>
+				<div className="absolute -inset-4 rounded-2xl bg-blue-500/10 blur-3xl" />
+				<div className="relative overflow-hidden rounded-xl border border-white/10">
+					<Image
+						src="/landing-page-dark.png"
+						width={1903}
+						height={1269}
+						alt="OpenCut video editor interface"
+						className="w-full"
+						priority
+					/>
+				</div>
+			</motion.div>
 		</div>
 	);
 }

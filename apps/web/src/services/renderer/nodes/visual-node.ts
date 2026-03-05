@@ -13,6 +13,13 @@ export interface VisualNodeParams {
 	transform: Transform;
 	opacity: number;
 	blendMode?: BlendMode;
+	effects?: { id: string; type: string; intensity: number }[];
+	transitions?: {
+		id: string;
+		type: string;
+		duration: number;
+		direction: "in" | "out";
+	}[];
 }
 
 export abstract class VisualNode<
@@ -35,11 +42,13 @@ export abstract class VisualNode<
 		source,
 		sourceWidth,
 		sourceHeight,
+		time,
 	}: {
 		renderer: CanvasRenderer;
 		source: CanvasImageSource;
 		sourceWidth: number;
 		sourceHeight: number;
+		time?: number;
 	}): void {
 		renderer.context.save();
 
@@ -58,7 +67,54 @@ export abstract class VisualNode<
 				? this.params.blendMode
 				: "source-over"
 		) as GlobalCompositeOperation;
-		renderer.context.globalAlpha = opacity;
+		
+		let currentOpacity = opacity;
+
+		// Handle Transitions
+		if (this.params.transitions && time !== undefined) {
+			const localTime = this.getLocalTime(time);
+			for (const transition of this.params.transitions) {
+				if (transition.type === "fade") {
+					if (transition.direction === "in") {
+						const fadeEndTime = this.params.trimStart + transition.duration;
+						if (localTime < fadeEndTime) {
+							const progress = Math.max(0, (localTime - this.params.trimStart) / transition.duration);
+							currentOpacity *= progress;
+						}
+					} else if (transition.direction === "out") {
+						const fadeStartTime = this.params.trimStart + this.params.duration - transition.duration;
+						if (localTime > fadeStartTime) {
+							const progress = Math.max(0, (this.params.trimStart + this.params.duration - localTime) / transition.duration);
+							currentOpacity *= progress;
+						}
+					}
+				}
+			}
+		}
+
+		renderer.context.globalAlpha = currentOpacity;
+
+		// Handle Effects (Filters)
+		if (this.params.effects && this.params.effects.length > 0) {
+			const filters: string[] = [];
+			for (const effect of this.params.effects) {
+				if (effect.type === "blur") {
+					filters.push(`blur(${effect.intensity * 20}px)`);
+				} else if (effect.type === "grayscale") {
+					filters.push(`grayscale(${effect.intensity * 100}%)`);
+				} else if (effect.type === "sepia") {
+					filters.push(`sepia(${effect.intensity * 100}%)`);
+				} else if (effect.type === "brightness") {
+					// 0.5 intensity = 100% brightness (normal).
+					filters.push(`brightness(${effect.intensity * 200}%)`);
+				} else if (effect.type === "contrast") {
+					filters.push(`contrast(${effect.intensity * 200}%)`);
+				}
+			}
+			if (filters.length > 0) {
+				renderer.context.filter = filters.join(" ");
+			}
+		}
 
 		if (transform.rotate !== 0) {
 			const centerX = x + scaledWidth / 2;

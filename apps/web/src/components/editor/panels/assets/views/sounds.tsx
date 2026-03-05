@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -130,7 +131,7 @@ function SoundEffectsView() {
 					setError({ error: null });
 				}
 
-				const response = await fetch(
+				const response = await apiFetch(
 					"/api/sounds/search?page_size=50&sort=downloads",
 				);
 

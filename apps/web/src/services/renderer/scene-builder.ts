@@ -70,6 +70,8 @@ export function buildScene(params: BuildSceneParams) {
 							transform: element.transform,
 							opacity: element.opacity,
 							blendMode: element.blendMode,
+							effects: element.effects,
+							transitions: element.transitions,
 						}),
 					);
 				}
@@ -84,6 +86,8 @@ export function buildScene(params: BuildSceneParams) {
 							transform: element.transform,
 							opacity: element.opacity,
 							blendMode: element.blendMode,
+							effects: element.effects,
+							transitions: element.transitions,
 							...(params.isPreview && {
 								maxSourceSize: PREVIEW_MAX_IMAGE_SIZE,
 							}),

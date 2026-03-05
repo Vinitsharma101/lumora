@@ -32,22 +32,26 @@ export function Header() {
 	];
 
 	return (
-		<header className="bg-background shadow-background/85 sticky top-0 z-10 shadow-[0_30px_35px_15px_rgba(0,0,0,1)]">
-			<div className="relative flex w-full items-center justify-between px-6 pt-4">
+		<header className="bg-background/80 sticky top-0 z-50 border-b border-white/10 backdrop-blur-xl">
+			<div className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-3">
 				<div className="relative z-10 flex items-center gap-6">
-					<Link href="/" className="flex items-center gap-3">
+					<Link href="/" className="flex items-center gap-2.5">
 						<Image
 							src={DEFAULT_LOGO_URL}
 							alt="OpenCut Logo"
 							className="invert dark:invert-0"
-							width={32}
-							height={32}
+							width={28}
+							height={28}
 						/>
+						<span className="text-sm font-semibold">OpenCut</span>
 					</Link>
-					<nav className="hidden items-center gap-4 md:flex">
+					<nav className="hidden items-center gap-1 md:flex">
 						{links.map((link) => (
 							<Link key={link.href} href={link.href}>
-								<Button variant="text" className="p-0 text-sm">
+								<Button
+									variant="ghost"
+									className="text-muted-foreground hover:text-foreground h-8 px-3 text-sm"
+								>
 									{link.label}
 								</Button>
 							</Link>
@@ -58,25 +62,38 @@ export function Header() {
 				<div className="relative z-10">
 					<div className="flex items-center gap-3 md:hidden">
 						<Button
-							variant="text"
+							variant="ghost"
 							size="icon"
-							className="flex items-center justify-center p-0"
+							className="flex items-center justify-center"
 							onClick={() => setIsMenuOpen(!isMenuOpen)}
 						>
-							<HugeiconsIcon icon={Menu02Icon} size={30} />
+							<HugeiconsIcon icon={Menu02Icon} size={24} />
 						</Button>
 					</div>
-					<div className="hidden items-center gap-3 md:flex">
-						<Link href={SOCIAL_LINKS.github}>
-							<Button className="bg-background text-sm" variant="outline">
-								<HugeiconsIcon icon={GithubIcon} className="size-4" />
+					<div className="hidden items-center gap-2 md:flex">
+						<Link
+							href={SOCIAL_LINKS.github}
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							<Button
+								variant="ghost"
+								className="text-muted-foreground hover:text-foreground h-8 gap-1.5 px-3 text-sm"
+							>
+								<HugeiconsIcon
+									icon={GithubIcon}
+									className="size-4"
+								/>
 								40k+
 							</Button>
 						</Link>
 						<Link href="/projects">
-							<Button variant="foreground" className="text-sm">
-								Projects
-								<ArrowRight className="size-4" />
+							<Button
+								variant="foreground"
+								className="h-8 px-4 text-sm"
+							>
+								Get started
+								<ArrowRight className="size-3.5" />
 							</Button>
 						</Link>
 						<ThemeToggle />
@@ -84,7 +101,7 @@ export function Header() {
 				</div>
 				<div
 					className={cn(
-						"bg-background/20 pointer-events-none fixed inset-0 opacity-0 backdrop-blur-3xl",
+						"bg-background/20 pointer-events-none fixed inset-0 z-40 opacity-0 backdrop-blur-3xl",
 						"transition-opacity duration-150",
 						isMenuOpen && "pointer-events-auto opacity-100",
 					)}

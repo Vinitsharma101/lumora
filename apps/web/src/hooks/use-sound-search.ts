@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { apiFetch } from "@/lib/api-client";
 import { useSoundsStore } from "@/stores/sounds-store";
 
 export function useSoundSearch({
@@ -47,7 +48,7 @@ export function useSoundSearch({
 			}
 
 			searchParams.set("commercial_only", commercialOnly.toString());
-			const response = await fetch(
+			const response = await apiFetch(
 				`/api/sounds/search?${searchParams.toString()}`,
 			);
 
@@ -95,7 +96,7 @@ export function useSoundSearch({
 				setSearchError({ error: null });
 				resetPagination();
 
-				const response = await fetch(
+				const response = await apiFetch(
 					`/api/sounds/search?q=${encodeURIComponent(query)}&type=effects&page=1`,
 				);
 

@@ -137,6 +137,11 @@ export const ACTIONS = {
 		category: "history",
 		defaultShortcuts: ["ctrl+shift+z", "ctrl+y"],
 	},
+	"toggle-ai-panel": {
+		description: "Toggle AI chat panel",
+		category: "controls",
+		defaultShortcuts: ["ctrl+shift+a"],
+	},
 } as const satisfies Record<string, TActionDefinition>;
 
 export type TAction = keyof typeof ACTIONS;

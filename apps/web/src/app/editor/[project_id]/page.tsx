@@ -14,6 +14,7 @@ import { EditorHeader } from "@/components/editor/editor-header";
 import { EditorProvider } from "@/components/providers/editor-provider";
 import { Onboarding } from "@/components/editor/onboarding";
 import { MigrationDialog } from "@/components/editor/dialogs/migration-dialog";
+import { AIChatPanel } from "@/components/editor/panels/ai-chat";
 import { usePanelStore } from "@/stores/panel-store";
 import { usePasteMedia } from "@/hooks/use-paste-media";
 
@@ -30,6 +31,7 @@ export default function Editor() {
 				</div>
 				<Onboarding />
 				<MigrationDialog />
+				<AIChatPanel />
 			</div>
 		</EditorProvider>
 	);

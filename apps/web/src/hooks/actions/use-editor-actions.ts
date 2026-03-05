@@ -5,6 +5,7 @@ import { useActionHandler } from "@/hooks/actions/use-action-handler";
 import { useEditor } from "../use-editor";
 import { useElementSelection } from "../timeline/element/use-element-selection";
 import { getElementsAtTime } from "@/lib/timeline";
+import { useAIChatStore } from "@/stores/ai-chat-store";
 
 export function useEditorActions() {
 	const editor = useEditor();
@@ -307,6 +308,14 @@ export function useEditorActions() {
 		"redo",
 		() => {
 			editor.command.redo();
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"toggle-ai-panel",
+		() => {
+			useAIChatStore.getState().togglePanel();
 		},
 		undefined,
 	);

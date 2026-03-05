@@ -48,6 +48,38 @@ export const accounts = pgTable("accounts", {
 	updatedAt: timestamp("updated_at").notNull(),
 }).enableRLS();
 
+// ── AI Chat ──
+
+export const aiChatSessions = pgTable("ai_chat_sessions", {
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	projectId: text("project_id").notNull(),
+	provider: text("provider").notNull(),
+	title: text("title").notNull(),
+	createdAt: timestamp("created_at")
+		.$defaultFn(() => new Date())
+		.notNull(),
+	updatedAt: timestamp("updated_at")
+		.$defaultFn(() => new Date())
+		.notNull(),
+}).enableRLS();
+
+export const aiChatMessages = pgTable("ai_chat_messages", {
+	id: text("id").primaryKey(),
+	sessionId: text("session_id")
+		.notNull()
+		.references(() => aiChatSessions.id, { onDelete: "cascade" }),
+	role: text("role").notNull(),
+	content: text("content").notNull(),
+	toolCalls: text("tool_calls"),
+	toolResults: text("tool_results"),
+	createdAt: timestamp("created_at")
+		.$defaultFn(() => new Date())
+		.notNull(),
+}).enableRLS();
+
 export const verifications = pgTable("verifications", {
 	id: text("id").primaryKey(),
 	identifier: text("identifier").notNull(),

@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
 	reactStrictMode: true,
 	productionBrowserSourceMaps: true,
 	output: "standalone",
+	serverExternalPackages: ["@remotion/renderer"],
 	images: {
 		remotePatterns: [
 			{
