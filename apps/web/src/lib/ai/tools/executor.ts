@@ -658,6 +658,308 @@ export async function executeToolCall(
 				};
 			}
 
+			// ── AI Image Generation ──
+			case "generate_image": {
+				const prompt = args.prompt as string;
+				const width = (args.width as number) ?? 1024;
+				const height = (args.height as number) ?? 1024;
+
+				const response = await apiFetch("/api/ai/video/text-to-image", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						prompt,
+						width,
+						height,
+						model: "schnell",
+					}),
+				});
+
+				if (!response.ok) {
+					const err = await response.json().catch(() => ({}));
+					return {
+						success: false,
+						result: `Image generation failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
+						description: "Generating image",
+					};
+				}
+
+				const jobData = await response.json();
+				return {
+					success: true,
+					result: `Image generation started. Job ID: ${(jobData as Record<string, string>).job_id}. The image will be ready shortly via FLUX AI. Poll status with job ID.`,
+					description: `Generating image: "${prompt.slice(0, 40)}..."`,
+				};
+			}
+
+			// ── AI Video Generation ──
+			case "generate_video": {
+				const prompt = args.prompt as string;
+				const duration = (args.duration as number) ?? 4;
+				const aspectRatio = (args.aspectRatio as string) ?? "16:9";
+				const provider = (args.provider as string) ?? "google_veo";
+
+				const response = await apiFetch("/api/ai/video/text-to-video", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						prompt,
+						duration,
+						aspect_ratio: aspectRatio,
+						provider,
+					}),
+				});
+
+				if (!response.ok) {
+					const err = await response.json().catch(() => ({}));
+					return {
+						success: false,
+						result: `Video generation failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
+						description: "Generating video",
+					};
+				}
+
+				const jobData = await response.json();
+				return {
+					success: true,
+					result: `Video generation started via ${provider}. Job ID: ${(jobData as Record<string, string>).job_id}. This may take 1-2 minutes.`,
+					description: `Generating video: "${prompt.slice(0, 40)}..."`,
+				};
+			}
+
+			// ── Video-to-Video Transformation ──
+			case "transform_video": {
+				const videoUrl = args.videoUrl as string;
+				const prompt = args.prompt as string;
+				const strength = (args.strength as number) ?? 0.7;
+
+				const response = await apiFetch("/api/ai/video/video-to-video", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						video_url: videoUrl,
+						prompt,
+						strength,
+					}),
+				});
+
+				if (!response.ok) {
+					const err = await response.json().catch(() => ({}));
+					return {
+						success: false,
+						result: `Video transformation failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
+						description: "Transforming video",
+					};
+				}
+
+				const jobData = await response.json();
+				return {
+					success: true,
+					result: `Video transformation started. Job ID: ${(jobData as Record<string, string>).job_id}. Applying "${prompt}" style.`,
+					description: `Transforming video with "${prompt.slice(0, 30)}..." style`,
+				};
+			}
+
+			// ── AI Speech Generation (ElevenLabs TTS) ──
+			case "generate_speech": {
+				const text = args.text as string;
+				const voiceId = args.voiceId as string | undefined;
+
+				const response = await apiFetch("/api/ai/voice/tts", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						text,
+						voice_id: voiceId,
+					}),
+				});
+
+				if (!response.ok) {
+					const err = await response.json().catch(() => ({}));
+					return {
+						success: false,
+						result: `Speech generation failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
+						description: "Generating speech",
+					};
+				}
+
+				const jobData = await response.json();
+				return {
+					success: true,
+					result: `Speech generation started via ElevenLabs. Job ID: ${(jobData as Record<string, string>).job_id}. Text: "${text.slice(0, 50)}..."`,
+					description: `Generating speech: "${text.slice(0, 30)}..."`,
+				};
+			}
+
+			// ── AI Sound Effect Generation (ElevenLabs) ──
+			case "generate_sound_effect": {
+				const prompt = args.prompt as string;
+				const durationSeconds = args.durationSeconds as number | undefined;
+
+				const response = await apiFetch("/api/ai/voice/sfx", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						prompt,
+						duration_seconds: durationSeconds,
+					}),
+				});
+
+				if (!response.ok) {
+					const err = await response.json().catch(() => ({}));
+					return {
+						success: false,
+						result: `Sound effect generation failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
+						description: "Generating sound effect",
+					};
+				}
+
+				const jobData = await response.json();
+				return {
+					success: true,
+					result: `Sound effect generation started. Job ID: ${(jobData as Record<string, string>).job_id}. Effect: "${prompt}"`,
+					description: `Generating SFX: "${prompt.slice(0, 30)}..."`,
+				};
+			}
+
+			// ── List Available Voices ──
+			case "list_voices": {
+				const response = await apiFetch("/api/ai/voice/voices");
+
+				if (!response.ok) {
+					return {
+						success: false,
+						result: "Failed to list voices. ElevenLabs API key may not be configured.",
+						description: "Listing available voices",
+					};
+				}
+
+				const voiceData = await response.json();
+				return {
+					success: true,
+					result: JSON.stringify(voiceData, null, 2),
+					description: "Listing ElevenLabs voices",
+				};
+			}
+
+			// ── Media Understanding ──
+			case "understand_media": {
+				const mediaUrl = args.mediaUrl as string;
+				const mediaType = args.mediaType as string;
+				const question = args.question as string | undefined;
+
+				const response = await apiFetch("/api/ai/video/understand-media", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						media_url: mediaUrl,
+						media_type: mediaType,
+						question,
+					}),
+				});
+
+				if (!response.ok) {
+					const err = await response.json().catch(() => ({}));
+					return {
+						success: false,
+						result: `Media analysis failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
+						description: "Analyzing media",
+					};
+				}
+
+				const jobData = await response.json();
+				return {
+					success: true,
+					result: `Media analysis started. Job ID: ${(jobData as Record<string, string>).job_id}. Analyzing ${mediaType} content.`,
+					description: `Analyzing ${mediaType}`,
+				};
+			}
+
+				// ── Autonomous Agent Pipeline ──
+			case "start_agent_session": {
+				const query = args.query as string;
+				const context = (args.context as Record<string, unknown>) ?? {};
+				const mediaAssetIds = (args.mediaAssetIds as string[]) ?? [];
+
+				const projectId = editor.project.getActive()?.metadata.id;
+
+				const response = await apiFetch(`/api/agent/execute/${projectId || "default"}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						query,
+						context,
+						media_asset_ids: mediaAssetIds,
+					}),
+				});
+
+				if (!response.ok) {
+					const err = await response.json().catch(() => ({}));
+					return {
+						success: false,
+						result: `Agent session failed to start: ${(err as Record<string, string>).detail || "Unknown error"}`,
+						description: "Starting agent session",
+					};
+				}
+
+				const data = await response.json();
+				return {
+					success: true,
+					result: `🎬 Agent session started! Session ID: ${(data as Record<string, string>).session_id}. The AI is now planning your video. Use get_agent_status to check progress, or wait for clarifying questions.`,
+					description: "Starting autonomous video creation",
+				};
+			}
+
+			case "answer_agent_question": {
+				const sessionId = args.sessionId as string;
+				const questionId = args.questionId as string;
+				const value = args.value as string;
+
+				const response = await apiFetch(`/api/agent/answer/${sessionId}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						question_id: questionId,
+						value,
+					}),
+				});
+
+				if (!response.ok) {
+					return {
+						success: false,
+						result: "Failed to submit answer",
+						description: "Submitting Q&A answer",
+					};
+				}
+
+				return {
+					success: true,
+					result: `Answer submitted for question ${questionId}. The agent will continue processing.`,
+					description: "Answering agent question",
+				};
+			}
+
+			case "get_agent_status": {
+				const sessionId = args.sessionId as string;
+
+				const response = await apiFetch(`/api/agent/status/${sessionId}`);
+
+				if (!response.ok) {
+					return {
+						success: false,
+						result: "Failed to get agent status. Session may have expired.",
+						description: "Checking agent status",
+					};
+				}
+
+				const statusData = await response.json();
+				return {
+					success: true,
+					result: JSON.stringify(statusData, null, 2),
+					description: `Agent status: ${(statusData as Record<string, string>).status}`,
+				};
+			}
+
 			default:
 				return {
 					success: false,

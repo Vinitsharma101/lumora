@@ -241,6 +241,9 @@ class AIJob(Base):
     # Status: queued, processing, completed, failed
     status: Mapped[str] = mapped_column(String, default="queued", nullable=False)
     progress: Mapped[float] = mapped_column(Float, default=0.0)
+    current_step: Mapped[str | None] = mapped_column(String, nullable=True)
+    chunks_total: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    chunks_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Input parameters (prompt, settings, etc.)
@@ -255,6 +258,13 @@ class AIJob(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    @property
+    def output_url(self) -> str | None:
+        """Helper to extract a generated visual URL from the generic output_data dict."""
+        if not self.output_data:
+            return None
+        return self.output_data.get("url") or self.output_data.get("video_url")
 
 
 class ProjectCollaborator(Base):
@@ -272,3 +282,56 @@ class ProjectCollaborator(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     project: Mapped["Project"] = relationship(back_populates="collaborators")
+
+
+class Character(Base):
+    """Persistent character profile for consistency across AI-generated scenes."""
+
+    __tablename__ = "characters"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reference_image_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    visual_analysis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    style_suffix: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pinecone_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    consistency_seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class AgentSession(Base):
+    """Tracks an autonomous agentic video-creation pipeline run."""
+
+    __tablename__ = "agent_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Pipeline state
+    status: Mapped[str] = mapped_column(String, default="running", nullable=False)
+    query: Mapped[str | None] = mapped_column(Text, nullable=True)
+    plan: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    pending_questions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    answered_questions: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    generated_assets: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    assembled_timeline: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    raw_video_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chunk_metadata: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    video_map: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    global_style_context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    review_notes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    messages: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

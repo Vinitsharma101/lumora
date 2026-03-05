@@ -9,7 +9,7 @@ All processing uses cloud APIs — no local models:
 - Beat sync via audio analysis API
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -32,7 +32,7 @@ from app.worker import enqueue_ai_job
 router = APIRouter(tags=["auto-edit"])
 
 
-@router.post("/api/auto-edit/analyze", response_model=AIJobResponse)
+@router.post("/api/auto-edit/analyze", response_model=AIJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def analyze_video(
     body: AutoEditAnalyzeRequest,
     request: Request,
@@ -90,7 +90,7 @@ async def analyze_video(
     )
 
 
-@router.post("/api/auto-edit/silence-remove", response_model=AIJobResponse)
+@router.post("/api/auto-edit/silence-remove", response_model=AIJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def remove_silence(
     body: SilenceRemoveRequest,
     request: Request,
@@ -128,7 +128,7 @@ async def remove_silence(
     )
 
 
-@router.post("/api/auto-edit/captions", response_model=AIJobResponse)
+@router.post("/api/auto-edit/captions", response_model=AIJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_captions(
     body: AutoCaptionsRequest,
     request: Request,
@@ -166,7 +166,7 @@ async def generate_captions(
     )
 
 
-@router.post("/api/auto-edit/shorts", response_model=AIJobResponse)
+@router.post("/api/auto-edit/shorts", response_model=AIJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_shorts(
     body: CreateShortsRequest,
     request: Request,
@@ -204,7 +204,7 @@ async def create_shorts(
     )
 
 
-@router.post("/api/auto-edit/beat-sync", response_model=AIJobResponse)
+@router.post("/api/auto-edit/beat-sync", response_model=AIJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def beat_sync(
     body: BeatSyncRequest,
     request: Request,
@@ -239,7 +239,7 @@ async def beat_sync(
     )
 
 
-@router.post("/api/auto-edit/reframe", response_model=AIJobResponse)
+@router.post("/api/auto-edit/reframe", response_model=AIJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def auto_reframe(
     body: AutoReframeRequest,
     request: Request,
@@ -274,7 +274,7 @@ async def auto_reframe(
     )
 
 
-@router.post("/api/auto-edit/voice-dub", response_model=AIJobResponse)
+@router.post("/api/auto-edit/voice-dub", response_model=AIJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def voice_dub(
     body: VoiceDubRequest,
     request: Request,

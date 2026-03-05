@@ -7,6 +7,7 @@ from app.config import settings
 from app.routers import health, auth, ai_chat, ai_music, ai_voice, ai_stock, ai_render_motion
 from app.routers import ai_sessions, sounds
 from app.routers import projects, media, render, ai_video, auto_edit, collaboration
+from app.routers import agent as agent_router
 
 
 @asynccontextmanager
@@ -48,3 +49,6 @@ app.include_router(render.router)
 app.include_router(ai_video.router)
 app.include_router(auto_edit.router)
 app.include_router(collaboration.router)
+
+# --- agentic pipeline ---
+app.include_router(agent_router.router)

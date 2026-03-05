@@ -3,14 +3,16 @@
 All generation uses cloud APIs — no local models:
 - Google Veo (text-to-video, image-to-video)
 - OpenAI Sora (text-to-video)
-- Replicate (Stable Video Diffusion, upscaling, background removal, style transfer)
-- ElevenLabs (voice/TTS for avatars)
+- Replicate (Stable Video Diffusion, FLUX image gen, upscaling, background removal, style transfer, media understanding)
+- ElevenLabs (voice/TTS for avatars, sound effects)
 """
 
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,10 +25,15 @@ from app.schemas.ai_video import (
     AIJobStatusResponse,
     BackgroundRemoveRequest,
     ImageToVideoRequest,
+    MediaUnderstandRequest,
     ScriptToScenesRequest,
+    SoundEffectRequest,
     StyleTransferRequest,
+    TextToImageRequest,
     TextToVideoRequest,
+    TTSRequest,
     UpscaleRequest,
+    VideoToVideoRequest,
     AIAvatarRequest,
 )
 from app.services.auto_edit.pipeline import create_auto_edit_job as create_ai_job
@@ -267,6 +274,209 @@ async def generate_avatar(
     )
 
 
+# ── Text-to-Image (FLUX via Replicate) ──
+
+
+@router.post("/api/ai/video/text-to-image", response_model=AIJobResponse)
+async def text_to_image(
+    body: TextToImageRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate an image from a text prompt using FLUX models via Replicate."""
+    await check_rate_limit(request)
+
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="text_to_image",
+        input_data={
+            "prompt": body.prompt,
+            "width": body.width,
+            "height": body.height,
+            "model": body.model,
+            "style": body.style,
+        },
+        project_id=body.project_id,
+        provider="replicate",
+    )
+
+    await enqueue_ai_job(job.id, "text_to_image")
+
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
+    )
+
+
+# ── Video-to-Video ──
+
+
+@router.post("/api/ai/video/video-to-video", response_model=AIJobResponse)
+async def video_to_video(
+    body: VideoToVideoRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Transform a video using AI-driven style transfer."""
+    await check_rate_limit(request)
+
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="video_to_video",
+        input_data={
+            "video_url": body.video_url,
+            "prompt": body.prompt,
+            "strength": body.strength,
+            "provider": body.provider,
+        },
+        project_id=body.project_id,
+        provider=body.provider,
+    )
+
+    await enqueue_ai_job(job.id, "video_to_video")
+
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
+    )
+
+
+# ── Media Understanding (Image/Video/Audio) ──
+
+
+@router.post("/api/ai/video/understand-media", response_model=AIJobResponse)
+async def understand_media(
+    body: MediaUnderstandRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Analyze and describe uploaded media using AI vision/audio models."""
+    await check_rate_limit(request)
+
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="understand_media",
+        input_data={
+            "media_url": body.media_url,
+            "media_type": body.media_type,
+            "question": body.question,
+        },
+        project_id=body.project_id,
+        provider="replicate",
+    )
+
+    await enqueue_ai_job(job.id, "understand_media")
+
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
+    )
+
+
+# ── ElevenLabs TTS ──
+
+
+@router.post("/api/ai/voice/tts", response_model=AIJobResponse)
+async def text_to_speech(
+    body: TTSRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate speech audio from text using ElevenLabs."""
+    await check_rate_limit(request)
+
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="tts",
+        input_data={
+            "text": body.text,
+            "voice_id": body.voice_id,
+            "model_id": body.model_id,
+            "stability": body.stability,
+            "similarity_boost": body.similarity_boost,
+        },
+        project_id=body.project_id,
+        provider="elevenlabs",
+    )
+
+    await enqueue_ai_job(job.id, "tts")
+
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
+    )
+
+
+# ── ElevenLabs Sound Effects ──
+
+
+@router.post("/api/ai/voice/sfx", response_model=AIJobResponse)
+async def generate_sound_effect(
+    body: SoundEffectRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a sound effect from a text description using ElevenLabs."""
+    await check_rate_limit(request)
+
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="sound_effect",
+        input_data={
+            "prompt": body.prompt,
+            "duration_seconds": body.duration_seconds,
+        },
+        project_id=body.project_id,
+        provider="elevenlabs",
+    )
+
+    await enqueue_ai_job(job.id, "sound_effect")
+
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
+    )
+
+
+# ── ElevenLabs Voice Listing ──
+
+
+@router.get("/api/ai/voice/voices")
+async def list_voices(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """List all available ElevenLabs voices."""
+    await check_rate_limit(request)
+
+    from app.services.ai_video.elevenlabs_provider import ElevenLabsProvider
+    provider = ElevenLabsProvider()
+    try:
+        result = await provider.list_voices()
+        return result
+    finally:
+        await provider.close()
+
 @router.get("/api/ai/jobs/{job_id}", response_model=AIJobStatusResponse)
 async def get_ai_job_status(
     job_id: str,
@@ -336,6 +546,10 @@ async def get_ai_job_status(
         input_data=job.input_data,
         output_data=job.output_data,
         provider=job.provider,
+        current_step=job.current_step,
+        chunks_total=job.chunks_total,
+        chunks_completed=job.chunks_completed,
+        output_url=job.output_url,
         created_at=job.created_at.isoformat(),
         completed_at=job.completed_at.isoformat() if job.completed_at else None,
     )
@@ -377,8 +591,68 @@ async def list_ai_jobs(
             input_data=j.input_data,
             output_data=j.output_data,
             provider=j.provider,
+            current_step=j.current_step,
+            chunks_total=j.chunks_total,
+            chunks_completed=j.chunks_completed,
+            output_url=j.output_url,
             created_at=j.created_at.isoformat(),
             completed_at=j.completed_at.isoformat() if j.completed_at else None,
         )
         for j in jobs
     ]
+
+@router.websocket("/api/ai/jobs/{job_id}/ws")
+async def ai_job_status_websocket(websocket: WebSocket, job_id: str, db: AsyncSession = Depends(get_db)):
+    """Stream live progress of an AI job via WebSockets."""
+    await websocket.accept()
+    
+    # We poll the DB every 2 seconds for status updates. In a truly scaled 
+    # system we would use Redis Pub/Sub directly, but polling the DB is a 
+    # safe baseline given PostgreSQL is tracking the job states.
+    try:
+        while True:
+            stmt = select(AIJob).where(AIJob.id == job_id)
+            result = await db.execute(stmt)
+            job = result.scalar_one_or_none()
+            
+            if not job:
+                await websocket.send_json({"error": "Job not found"})
+                await websocket.close(code=1000)
+                return
+                
+            response = AIJobStatusResponse(
+                id=job.id,
+                job_type=job.job_type,
+                status=job.status,
+                progress=job.progress,
+                current_step=job.current_step,
+                chunks_total=job.chunks_total,
+                chunks_completed=job.chunks_completed,
+                error_message=job.error_message,
+                output_url=job.output_url,
+                input_data=job.input_data,
+                output_data=job.output_data,
+                provider=job.provider,
+                created_at=job.created_at.isoformat(),
+                completed_at=job.completed_at.isoformat() if job.completed_at else None,
+            )
+            
+            await websocket.send_json(response.model_dump())
+            
+            if job.status in ("completed", "failed"):
+                await websocket.close(code=1000)
+                break
+                
+            await asyncio.sleep(2)
+            # Need to expire the session so we get fresh data from the DB
+            # rather than cached sqlalchemy instances on next tick.
+            db.expire(job) 
+
+    except WebSocketDisconnect:
+        print(f"Client disconnected from job stream {job_id}")
+    except Exception as e:
+        print(f"WebSocket Error: {e}")
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass

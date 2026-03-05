@@ -66,6 +66,45 @@ class AIAvatarRequest(BaseModel):
     project_id: str | None = None
 
 
+class TextToImageRequest(BaseModel):
+    prompt: str
+    width: int = 1024
+    height: int = 1024
+    model: Literal["schnell", "dev"] = "schnell"
+    style: str | None = None
+    project_id: str | None = None
+
+
+class VideoToVideoRequest(BaseModel):
+    video_url: str
+    prompt: str
+    strength: float = 0.7
+    provider: Literal["replicate"] = "replicate"
+    project_id: str | None = None
+
+
+class MediaUnderstandRequest(BaseModel):
+    media_url: str
+    media_type: Literal["image", "video", "audio"]
+    question: str | None = None
+    project_id: str | None = None
+
+
+class TTSRequest(BaseModel):
+    text: str
+    voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Rachel (default)
+    model_id: str = "eleven_multilingual_v2"
+    stability: float = 0.5
+    similarity_boost: float = 0.75
+    project_id: str | None = None
+
+
+class SoundEffectRequest(BaseModel):
+    prompt: str
+    duration_seconds: float | None = None
+    project_id: str | None = None
+
+
 class StoryboardScene(BaseModel):
     scene_number: int
     description: str
@@ -146,8 +185,12 @@ class AIJobResponse(BaseModel):
     status: str
     job_type: str
     progress: float
-    output_data: dict | None = None
+    current_step: str | None = None
+    chunks_total: int = 1
+    chunks_completed: int = 0
     error_message: str | None = None
+    output_url: str | None = None
+    output_data: dict | None = None
 
 
 class AIJobStatusResponse(BaseModel):
@@ -155,11 +198,15 @@ class AIJobStatusResponse(BaseModel):
     job_type: str
     status: str
     progress: float
-    error_message: str | None
-    input_data: dict | None
-    output_data: dict | None
-    provider: str | None
+    current_step: str | None = None
+    chunks_total: int = 1
+    chunks_completed: int = 0
+    error_message: str | None = None
+    output_url: str | None = None
+    input_data: dict | None = None
+    output_data: dict | None = None
+    provider: str | None = None
     created_at: str
-    completed_at: str | None
+    completed_at: str | None = None
 
     model_config = {"from_attributes": True}
