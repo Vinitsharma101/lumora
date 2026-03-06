@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useAIChatStore } from "@/stores/ai-chat-store";
-import type { AIPendingContext } from "@/stores/ai-chat-store";
+import type { AIPendingContext, AttachedFile } from "@/stores/ai-chat-store";
 import { useAIChat } from "@/hooks/use-ai-chat";
 import { Button } from "@/components/ui/button";
-import { ArrowUp, Square, X } from "lucide-react";
+import { ArrowUp, Square, X, Plus, Image, Video, Music, FileIcon, Loader2 } from "lucide-react";
 import { cn } from "@/utils/ui";
 
 function formatMediaType(type: string): string {
@@ -23,6 +23,32 @@ function formatDuration(seconds: number): string {
 	const mins = Math.floor(seconds / 60);
 	const secs = (seconds % 60).toFixed(1);
 	return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
+function formatFileSize(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileMediaType(mimeType: string): AttachedFile["type"] {
+	if (mimeType.startsWith("image/")) return "image";
+	if (mimeType.startsWith("video/")) return "video";
+	if (mimeType.startsWith("audio/")) return "audio";
+	return "file";
+}
+
+function getFileIcon(type: AttachedFile["type"]) {
+	switch (type) {
+		case "image":
+			return Image;
+		case "video":
+			return Video;
+		case "audio":
+			return Music;
+		default:
+			return FileIcon;
+	}
 }
 
 function buildContextPrefix(context: AIPendingContext): string {
@@ -84,10 +110,64 @@ function PendingContextBadges({
 	);
 }
 
+function AttachedFileBadges({
+	files,
+	onRemove,
+}: {
+	files: AttachedFile[];
+	onRemove: (id: string) => void;
+}) {
+	if (files.length === 0) return null;
+
+	const typeColors: Record<string, string> = {
+		image: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+		video: "bg-blue-500/15 text-blue-400 border-blue-500/25",
+		audio: "bg-green-500/15 text-green-400 border-green-500/25",
+		file: "bg-gray-500/15 text-gray-400 border-gray-500/25",
+	};
+
+	return (
+		<div className="flex flex-wrap items-center gap-1.5 px-3 pb-1 pt-2">
+			<span className="text-xs text-muted-foreground">Attached:</span>
+			{files.map((file) => {
+				const IconComponent = getFileIcon(file.type);
+				return (
+					<span
+						key={file.id}
+						className={cn(
+							"inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs",
+							typeColors[file.type],
+						)}
+					>
+						{file.status === "uploading" ? (
+							<Loader2 className="size-3 animate-spin" />
+						) : (
+							<IconComponent className="size-3" />
+						)}
+						<span className="max-w-[100px] truncate">{file.name}</span>
+						<span className="text-[10px] opacity-60">
+							{formatFileSize(file.size)}
+						</span>
+						<button
+							type="button"
+							onClick={() => onRemove(file.id)}
+							className="ml-0.5 rounded-full p-0.5 hover:bg-white/10"
+						>
+							<X className="size-2.5" />
+						</button>
+					</span>
+				);
+			})}
+		</div>
+	);
+}
+
 export function AIChatInput() {
 	const [input, setInput] = useState("");
+	const [isDragOver, setIsDragOver] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
-	const { isStreaming, pendingContext } = useAIChatStore();
+	const fileInputRef = useRef<HTMLInputElement>(null);
+	const { isStreaming, pendingContext, attachedFiles } = useAIChatStore();
 	const { sendMessage, stopStreaming } = useAIChat();
 
 	// Auto-focus input when pending context arrives
@@ -101,6 +181,74 @@ export function AIChatInput() {
 		useAIChatStore.getState().clearPendingContext();
 	};
 
+	const handleFileSelect = useCallback((files: FileList | File[]) => {
+		const store = useAIChatStore.getState();
+		const fileArray = Array.from(files);
+
+		for (const file of fileArray) {
+			const mediaType = getFileMediaType(file.type);
+			const localUrl = URL.createObjectURL(file);
+
+			const attachedFile: AttachedFile = {
+				id: crypto.randomUUID(),
+				name: file.name,
+				type: mediaType,
+				mimeType: file.type,
+				size: file.size,
+				localUrl,
+				status: "uploaded", // Local files are ready immediately
+				uploadedUrl: localUrl, // In a full implementation, this would be an API URL
+			};
+
+			store.addAttachedFile(attachedFile);
+		}
+	}, []);
+
+	const handleFileInputChange = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => {
+			if (e.target.files && e.target.files.length > 0) {
+				handleFileSelect(e.target.files);
+				e.target.value = ""; // Reset so the same file can be selected again
+			}
+		},
+		[handleFileSelect],
+	);
+
+	const handleRemoveFile = useCallback((id: string) => {
+		const store = useAIChatStore.getState();
+		const file = store.attachedFiles.find((f) => f.id === id);
+		if (file) {
+			URL.revokeObjectURL(file.localUrl);
+		}
+		store.removeAttachedFile(id);
+	}, []);
+
+	// Drag-and-drop handlers
+	const handleDragOver = useCallback((e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		setIsDragOver(true);
+	}, []);
+
+	const handleDragLeave = useCallback((e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		setIsDragOver(false);
+	}, []);
+
+	const handleDrop = useCallback(
+		(e: React.DragEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			setIsDragOver(false);
+
+			if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+				handleFileSelect(e.dataTransfer.files);
+			}
+		},
+		[handleFileSelect],
+	);
+
 	const handleSubmit = () => {
 		const trimmed = input.trim();
 		if (!trimmed || isStreaming) return;
@@ -112,10 +260,20 @@ export function AIChatInput() {
 			messageContent = `${contextPrefix}\n\n${trimmed}`;
 		}
 
+		// Add file context to message
+		const currentFiles = useAIChatStore.getState().attachedFiles;
+		if (currentFiles.length > 0) {
+			const fileDescriptions = currentFiles
+				.map((f) => `[Attached ${f.type}: "${f.name}" (${formatFileSize(f.size)})]`)
+				.join(" ");
+			messageContent = `${fileDescriptions}\n\n${messageContent}`;
+		}
+
 		useAIChatStore.getState().addMessage({
 			id: crypto.randomUUID(),
 			role: "user",
 			content: trimmed,
+			attachments: currentFiles.length > 0 ? [...currentFiles] : undefined,
 			createdAt: new Date(),
 		});
 
@@ -124,8 +282,9 @@ export function AIChatInput() {
 			textareaRef.current.style.height = "auto";
 		}
 
-		// Clear context after sending
+		// Clear context and files after sending
 		useAIChatStore.getState().clearPendingContext();
+		useAIChatStore.getState().clearAttachedFiles();
 
 		sendMessage(messageContent);
 	};
@@ -146,23 +305,66 @@ export function AIChatInput() {
 
 	const placeholderText = pendingContext
 		? `Ask about the selected ${pendingContext.elements.map((element) => formatMediaType(element.type).toLowerCase()).join(", ")}...`
-		: "Describe your edit...";
+		: attachedFiles.length > 0
+			? "Describe what to do with the attached files..."
+			: "Describe your edit...";
 
 	return (
-		<div className="border-t p-3">
+		<div
+			className={cn("border-t p-3", isDragOver && "bg-purple-500/5")}
+			onDragOver={handleDragOver}
+			onDragLeave={handleDragLeave}
+			onDrop={handleDrop}
+		>
+			{/* Drag overlay */}
+			{isDragOver && (
+				<div className="mb-2 flex items-center justify-center rounded-lg border-2 border-dashed border-purple-500/40 bg-purple-500/5 py-3">
+					<span className="text-xs text-purple-400">
+						Drop files here to attach
+					</span>
+				</div>
+			)}
+
 			{pendingContext && pendingContext.elements.length > 0 && (
 				<PendingContextBadges
 					context={pendingContext}
 					onClear={handleClearContext}
 				/>
 			)}
+
+			<AttachedFileBadges
+				files={attachedFiles}
+				onRemove={handleRemoveFile}
+			/>
+
 			<div
 				className={cn(
 					"flex items-end gap-2 rounded-lg border bg-background px-3 py-2",
 					"focus-within:ring-1 focus-within:ring-ring",
 					pendingContext && "ring-1 ring-purple-500/30",
+					attachedFiles.length > 0 && "ring-1 ring-amber-500/30",
 				)}
 			>
+				{/* File upload button */}
+				<Button
+					size="icon"
+					variant="ghost"
+					className="size-7 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+					onClick={() => fileInputRef.current?.click()}
+					disabled={isStreaming}
+					title="Attach files (images, videos, audio)"
+				>
+					<Plus className="size-4" />
+				</Button>
+				<input
+					ref={fileInputRef}
+					type="file"
+					multiple
+					accept="image/*,video/*,audio/*"
+					className="hidden"
+					onChange={handleFileInputChange}
+				/>
+
 				<textarea
 					ref={textareaRef}
 					value={input}

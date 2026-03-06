@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # Replicate (API-based AI models)
     REPLICATE_API_TOKEN: str | None = None
 
+    # Pinecone (character consistency vector embeddings)
+    PINECONE_API_KEY: str | None = None
+    PINECONE_ENVIRONMENT: str = "us-east-1-aws"
+
     # OpenAI Sora (video generation)
     # Uses the same OPENAI_API_KEY above
 

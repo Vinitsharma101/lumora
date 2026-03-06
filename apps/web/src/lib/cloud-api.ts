@@ -61,8 +61,12 @@ export interface AIJobResponse {
 	status: string;
 	job_type: string;
 	progress: number;
-	output_data: Record<string, unknown> | null;
+	current_step: string | null;
+	chunks_total: number;
+	chunks_completed: number;
 	error_message: string | null;
+	output_url: string | null;
+	output_data: Record<string, unknown> | null;
 	provider: string | null;
 	created_at?: string;
 	completed_at?: string | null;
@@ -456,9 +460,220 @@ export async function getAIJobStatus({
 	return jsonOrThrow<AIJobResponse>(response);
 }
 
-// ---------------------------------------------------------------------------
-// Auto-Edit
-// ---------------------------------------------------------------------------
+// ── New AI Capabilities ──
+
+export async function generateTextToImage({
+	prompt,
+	width,
+	height,
+	model,
+	projectId,
+}: {
+	prompt: string;
+	width?: number;
+	height?: number;
+	model?: "schnell" | "dev";
+	projectId?: string;
+}): Promise<AIJobResponse> {
+	const response = await apiFetch("/api/ai/video/text-to-image", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			prompt,
+			width,
+			height,
+			model,
+			project_id: projectId,
+		}),
+	});
+	return jsonOrThrow<AIJobResponse>(response);
+}
+
+export async function transformVideoToVideo({
+	videoUrl,
+	prompt,
+	strength,
+	projectId,
+}: {
+	videoUrl: string;
+	prompt: string;
+	strength?: number;
+	projectId?: string;
+}): Promise<AIJobResponse> {
+	const response = await apiFetch("/api/ai/video/video-to-video", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			video_url: videoUrl,
+			prompt,
+			strength,
+			project_id: projectId,
+		}),
+	});
+	return jsonOrThrow<AIJobResponse>(response);
+}
+
+export async function understandMedia({
+	mediaUrl,
+	mediaType,
+	question,
+	projectId,
+}: {
+	mediaUrl: string;
+	mediaType: "image" | "video" | "audio";
+	question?: string;
+	projectId?: string;
+}): Promise<AIJobResponse> {
+	const response = await apiFetch("/api/ai/video/understand-media", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			media_url: mediaUrl,
+			media_type: mediaType,
+			question,
+			project_id: projectId,
+		}),
+	});
+	return jsonOrThrow<AIJobResponse>(response);
+}
+
+export async function generateSpeech({
+	text,
+	voiceId,
+	modelId,
+	stability,
+	similarityBoost,
+	projectId,
+}: {
+	text: string;
+	voiceId?: string;
+	modelId?: string;
+	stability?: number;
+	similarityBoost?: number;
+	projectId?: string;
+}): Promise<AIJobResponse> {
+	const response = await apiFetch("/api/ai/voice/tts", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			text,
+			voice_id: voiceId,
+			model_id: modelId,
+			stability,
+			similarity_boost: similarityBoost,
+			project_id: projectId,
+		}),
+	});
+	return jsonOrThrow<AIJobResponse>(response);
+}
+
+export async function generateSoundEffect({
+	prompt,
+	durationSeconds,
+	projectId,
+}: {
+	prompt: string;
+	durationSeconds?: number;
+	projectId?: string;
+}): Promise<AIJobResponse> {
+	const response = await apiFetch("/api/ai/voice/sfx", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			prompt,
+			duration_seconds: durationSeconds,
+			project_id: projectId,
+		}),
+	});
+	return jsonOrThrow<AIJobResponse>(response);
+}
+
+export interface VoiceInfo {
+	voice_id: string;
+	name: string;
+	category: string;
+	description: string;
+	preview_url: string | null;
+	labels: Record<string, string>;
+}
+
+export async function listVoices(): Promise<{ voices: VoiceInfo[] }> {
+	const response = await apiFetch("/api/ai/voice/voices");
+	return jsonOrThrow<{ voices: VoiceInfo[] }>(response);
+}
+
+// ── Agent Pipeline ──
+
+export interface AgentSessionStatus {
+	session_id: string;
+	status: string;
+	pending_questions: Array<{
+		id: string;
+		question: string;
+		category: string;
+		options: Array<{ value: string; label: string }>;
+	}>;
+	scene_plan: Record<string, unknown> | null;
+	generated_assets_count: number;
+	assembled_timeline: Record<string, unknown> | null;
+	review_score: number | null;
+	review_suggestions: string[];
+	messages: Array<{ role: string; content: string }>;
+	error: string | null;
+}
+
+export async function startAgentSession({
+	projectId,
+	query,
+	context,
+	mediaAssetIds,
+}: {
+	projectId: string;
+	query: string;
+	context?: Record<string, unknown>;
+	mediaAssetIds?: string[];
+}): Promise<{ session_id: string; status: string }> {
+	const response = await apiFetch(`/api/agent/execute/${projectId}`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			query,
+			context: context ?? {},
+			media_asset_ids: mediaAssetIds ?? [],
+		}),
+	});
+	return jsonOrThrow<{ session_id: string; status: string }>(response);
+}
+
+export async function submitAgentAnswer({
+	sessionId,
+	questionId,
+	value,
+}: {
+	sessionId: string;
+	questionId: string;
+	value: string;
+}): Promise<{ status: string }> {
+	const response = await apiFetch(`/api/agent/answer/${sessionId}`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			question_id: questionId,
+			value,
+		}),
+	});
+	return jsonOrThrow<{ status: string }>(response);
+}
+
+export async function getAgentSessionStatus({
+	sessionId,
+}: {
+	sessionId: string;
+}): Promise<AgentSessionStatus> {
+	const response = await apiFetch(`/api/agent/status/${sessionId}`);
+	return jsonOrThrow<AgentSessionStatus>(response);
+}
+
 
 export async function analyzeVideo({
 	videoUrl,

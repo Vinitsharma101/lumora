@@ -14,11 +14,25 @@ export interface ToolCallStatus {
 	error?: string;
 }
 
+export interface AttachedFile {
+	id: string;
+	name: string;
+	type: "image" | "video" | "audio" | "file";
+	mimeType: string;
+	size: number;
+	localUrl: string; // Object URL for preview
+	uploadedUrl?: string; // Remote URL after upload
+	thumbnailUrl?: string;
+	status: "pending" | "uploading" | "uploaded" | "error";
+	error?: string;
+}
+
 export interface ChatMessage {
 	id: string;
 	role: ChatMessageRole;
 	content: string;
 	toolCalls?: ToolCallStatus[];
+	attachments?: AttachedFile[];
 	createdAt: Date;
 }
 
@@ -45,6 +59,7 @@ interface AIChatState {
 	isStreaming: boolean;
 	error: string | null;
 	pendingContext: AIPendingContext | null;
+	attachedFiles: AttachedFile[];
 
 	togglePanel: () => void;
 	openPanel: () => void;
@@ -58,6 +73,10 @@ interface AIChatState {
 	setError: (error: string | null) => void;
 	setPendingContext: (context: AIPendingContext | null) => void;
 	clearPendingContext: () => void;
+	addAttachedFile: (file: AttachedFile) => void;
+	removeAttachedFile: (id: string) => void;
+	updateAttachedFile: (id: string, update: Partial<AttachedFile>) => void;
+	clearAttachedFiles: () => void;
 }
 
 export const useAIChatStore = create<AIChatState>()(
@@ -70,6 +89,7 @@ export const useAIChatStore = create<AIChatState>()(
 			isStreaming: false,
 			error: null,
 			pendingContext: null,
+			attachedFiles: [],
 
 			togglePanel: () =>
 				set((state) => ({ isPanelOpen: !state.isPanelOpen })),
@@ -94,6 +114,19 @@ export const useAIChatStore = create<AIChatState>()(
 			setError: (error) => set({ error }),
 			setPendingContext: (context) => set({ pendingContext: context }),
 			clearPendingContext: () => set({ pendingContext: null }),
+			addAttachedFile: (file) =>
+				set((state) => ({ attachedFiles: [...state.attachedFiles, file] })),
+			removeAttachedFile: (id) =>
+				set((state) => ({
+					attachedFiles: state.attachedFiles.filter((f) => f.id !== id),
+				})),
+			updateAttachedFile: (id, update) =>
+				set((state) => ({
+					attachedFiles: state.attachedFiles.map((f) =>
+						f.id === id ? { ...f, ...update } : f,
+					),
+				})),
+			clearAttachedFiles: () => set({ attachedFiles: [] }),
 		}),
 		{
 			name: "ai-chat-settings",

@@ -382,6 +382,251 @@ export const AI_TOOLS: ToolDefinition[] = [
 			required: [],
 		},
 	},
+
+	// ── AI Image Generation (Replicate FLUX) ──
+	{
+		name: "generate_image",
+		description:
+			"Generate an image from a text description using FLUX AI model and add it to the timeline. Use for creating custom visuals, backgrounds, thumbnails, or any image needed in the video.",
+		parameters: {
+			type: "object",
+			properties: {
+				prompt: {
+					type: "string",
+					description: "Detailed description of the image to generate",
+				},
+				width: {
+					type: "number",
+					description: "Image width in pixels (default: 1024, max: 1440)",
+				},
+				height: {
+					type: "number",
+					description: "Image height in pixels (default: 1024, max: 1440)",
+				},
+				startTime: {
+					type: "number",
+					description: "Where to place on timeline (seconds). Default: 0",
+				},
+				duration: {
+					type: "number",
+					description: "How long to show the image (seconds). Default: 5",
+				},
+			},
+			required: ["prompt"],
+		},
+	},
+
+	// ── AI Video Generation ──
+	{
+		name: "generate_video",
+		description:
+			"Generate a video clip from a text description using AI models (Google Veo, Replicate, or OpenAI Sora) and add it to the timeline.",
+		parameters: {
+			type: "object",
+			properties: {
+				prompt: {
+					type: "string",
+					description: "Detailed description of the video scene to generate",
+				},
+				duration: {
+					type: "number",
+					description: "Video duration in seconds (default: 4)",
+				},
+				aspectRatio: {
+					type: "string",
+					enum: ["16:9", "9:16", "1:1"],
+					description: "Video aspect ratio (default: 16:9)",
+				},
+				provider: {
+					type: "string",
+					enum: ["google_veo", "replicate", "openai_sora"],
+					description: "AI provider to use (default: google_veo)",
+				},
+				startTime: {
+					type: "number",
+					description: "Where to place on timeline (seconds). Default: end of timeline",
+				},
+			},
+			required: ["prompt"],
+		},
+	},
+
+	// ── Video-to-Video Transformation ──
+	{
+		name: "transform_video",
+		description:
+			"Transform an existing video clip using AI style transfer. Change the visual style, apply artistic effects, or restyle footage.",
+		parameters: {
+			type: "object",
+			properties: {
+				videoUrl: {
+					type: "string",
+					description: "URL of the video to transform",
+				},
+				prompt: {
+					type: "string",
+					description: "Description of the desired transformation/style (e.g., 'anime style', 'oil painting', 'neon cyberpunk')",
+				},
+				strength: {
+					type: "number",
+					description: "Transformation strength (0.0-1.0, default: 0.7). Higher = more transformation",
+				},
+			},
+			required: ["videoUrl", "prompt"],
+		},
+	},
+
+	// ── AI Speech Generation (ElevenLabs) ──
+	{
+		name: "generate_speech",
+		description:
+			"Generate realistic speech audio from text using ElevenLabs TTS and add it to the timeline as an audio track. Use for narration, voiceovers, character dialogue.",
+		parameters: {
+			type: "object",
+			properties: {
+				text: {
+					type: "string",
+					description: "Text to convert to speech",
+				},
+				voiceId: {
+					type: "string",
+					description: "ElevenLabs voice ID. Use list_voices to see available voices. Default: Rachel narrator voice.",
+				},
+				startTime: {
+					type: "number",
+					description: "Where to place on timeline (seconds). Default: 0",
+				},
+			},
+			required: ["text"],
+		},
+	},
+
+	// ── AI Sound Effect Generation (ElevenLabs) ──
+	{
+		name: "generate_sound_effect",
+		description:
+			"Generate a sound effect from a text description using ElevenLabs AI and add it to the timeline. Use for ambient sounds, transitions, impacts, etc.",
+		parameters: {
+			type: "object",
+			properties: {
+				prompt: {
+					type: "string",
+					description: "Description of the sound effect (e.g., 'thunder crack', 'whoosh transition', 'crowd cheering')",
+				},
+				durationSeconds: {
+					type: "number",
+					description: "Desired duration in seconds (optional, AI decides if not specified)",
+				},
+				startTime: {
+					type: "number",
+					description: "Where to place on timeline (seconds). Default: 0",
+				},
+			},
+			required: ["prompt"],
+		},
+	},
+
+	// ── List Available Voices ──
+	{
+		name: "list_voices",
+		description:
+			"List all available ElevenLabs voices for speech generation. Shows voice names, categories, and IDs.",
+		parameters: {
+			type: "object",
+			properties: {},
+			required: [],
+		},
+	},
+
+	// ── Media Understanding ──
+	{
+		name: "understand_media",
+		description:
+			"Analyze an image, video, or audio file using AI to understand its content. Returns a detailed description. Use when the user uploads media or asks about the content of existing media.",
+		parameters: {
+			type: "object",
+			properties: {
+				mediaUrl: {
+					type: "string",
+					description: "URL of the media file to analyze",
+				},
+				mediaType: {
+					type: "string",
+					enum: ["image", "video", "audio"],
+					description: "Type of media to analyze",
+				},
+				question: {
+					type: "string",
+					description: "Specific question about the media (optional, defaults to general description)",
+				},
+			},
+			required: ["mediaUrl", "mediaType"],
+		},
+	},
+
+	// ── Autonomous Agent Pipeline ──
+	{
+		name: "start_agent_session",
+		description:
+			"Start the autonomous agentic video creation pipeline. Use when the user asks to 'create a video', 'make a movie', or any full video production request. The agent will plan scenes, generate assets, assemble timeline, and review quality.",
+		parameters: {
+			type: "object",
+			properties: {
+				query: {
+					type: "string",
+					description: "The user's full video creation request (e.g., 'create a 30s YouTube video about space exploration')",
+				},
+				context: {
+					type: "object",
+					description: "Additional context (aspect ratio, style, etc. from Q&A)",
+				},
+				mediaAssetIds: {
+					type: "array",
+					items: { type: "string" },
+					description: "IDs of uploaded media assets to include",
+				},
+			},
+			required: ["query"],
+		},
+	},
+	{
+		name: "answer_agent_question",
+		description:
+			"Submit the user's answer to an agent's clarifying question. Use after start_agent_session when the agent asks questions.",
+		parameters: {
+			type: "object",
+			properties: {
+				sessionId: {
+					type: "string",
+					description: "The agent session ID returned by start_agent_session",
+				},
+				questionId: {
+					type: "string",
+					description: "The question ID being answered",
+				},
+				value: {
+					type: "string",
+					description: "The user's answer value",
+				},
+			},
+			required: ["sessionId", "questionId", "value"],
+		},
+	},
+	{
+		name: "get_agent_status",
+		description:
+			"Poll the autonomous agent pipeline for current status, progress, pending questions, and results. Use to check if the agent has finished or needs more input.",
+		parameters: {
+			type: "object",
+			properties: {
+				sessionId: {
+					type: "string",
+					description: "The agent session ID to check",
+				},
+			},
+			required: ["sessionId"],
+		},
+	},
 ];
 
 export function getToolDescriptions(): Record<string, string> {
