@@ -1,7 +1,7 @@
 [project]
-name = "opencut-api"
+name = "gracecut-api"
 version = "0.2.0"
-description = "OpenCut FastAPI backend — AI video platform"
+description = "GraceCut FastAPI backend — agentic AI video platform"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",

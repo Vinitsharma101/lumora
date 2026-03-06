@@ -19,15 +19,18 @@ class ClaudeProvider:
         system_prompt: str,
     ) -> AsyncGenerator[StreamChunk, None]:
         anthropic_messages = _to_anthropic_messages(messages)
-        anthropic_tools = _to_anthropic_tools(tools) if tools else None
+        anthropic_tools = _to_anthropic_tools(tools) if tools else []
 
-        async with self.client.messages.stream(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4096,
-            system=system_prompt,
-            messages=anthropic_messages,
-            tools=anthropic_tools,
-        ) as stream:
+        stream_kwargs = {
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 4096,
+            "system": system_prompt,
+            "messages": anthropic_messages,
+        }
+        if anthropic_tools:
+            stream_kwargs["tools"] = anthropic_tools
+
+        async with self.client.messages.stream(**stream_kwargs) as stream:
             tool_input_buffers: dict[int, dict] = {}
 
             async for event in stream:

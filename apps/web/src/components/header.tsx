@@ -7,24 +7,16 @@ import { Button } from "./ui/button";
 import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
-import { GithubIcon, Menu02Icon } from "@hugeicons/core-free-icons";
+import { Menu02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "@/utils/ui";
-import { DEFAULT_LOGO_URL, SOCIAL_LINKS } from "@/constants/site-constants";
+import { DEFAULT_LOGO_URL } from "@/constants/site-constants";
 
 export function Header() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const closeMenu = () => setIsMenuOpen(false);
 
 	const links = [
-		{
-			label: "Contributors",
-			href: "/contributors",
-		},
-		{
-			label: "Sponsors",
-			href: "/sponsors",
-		},
 		{
 			label: "Blog",
 			href: "/blog",
@@ -38,12 +30,12 @@ export function Header() {
 					<Link href="/" className="flex items-center gap-2.5">
 						<Image
 							src={DEFAULT_LOGO_URL}
-							alt="OpenCut Logo"
+							alt="GraceCut Logo"
 							className="invert dark:invert-0"
 							width={28}
 							height={28}
 						/>
-						<span className="text-sm font-semibold">OpenCut</span>
+						<span className="text-sm font-semibold">GraceCut</span>
 					</Link>
 					<nav className="hidden items-center gap-1 md:flex">
 						{links.map((link) => (
@@ -71,22 +63,6 @@ export function Header() {
 						</Button>
 					</div>
 					<div className="hidden items-center gap-2 md:flex">
-						<Link
-							href={SOCIAL_LINKS.github}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							<Button
-								variant="ghost"
-								className="text-muted-foreground hover:text-foreground h-8 gap-1.5 px-3 text-sm"
-							>
-								<HugeiconsIcon
-									icon={GithubIcon}
-									className="size-4"
-								/>
-								40k+
-							</Button>
-						</Link>
 						<Link href="/projects">
 							<Button
 								variant="foreground"

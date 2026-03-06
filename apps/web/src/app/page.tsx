@@ -1,5 +1,5 @@
 import { Hero } from "@/components/landing/hero";
-import { LogoCarousel } from "@/components/landing/logo-carousel";
+
 import { UseCases } from "@/components/landing/use-cases";
 import { Features } from "@/components/landing/features";
 import { AIHighlight } from "@/components/landing/ai-highlight";
@@ -21,7 +21,6 @@ export default async function Home() {
 		<div className="dark bg-[hsl(0,0%,5%)] text-[hsl(0,0%,87%)]">
 			<Header />
 			<Hero />
-			<LogoCarousel />
 			<UseCases />
 			<Features />
 			<AIHighlight />

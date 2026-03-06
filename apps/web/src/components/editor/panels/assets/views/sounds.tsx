@@ -90,6 +90,7 @@ function SoundEffectsView() {
 		setCurrentPage,
 		setHasNextPage,
 		setTotalCount,
+	error,
 	} = useSoundsStore();
 	const {
 		results: searchResults,
@@ -137,7 +138,10 @@ function SoundEffectsView() {
 
 				if (!shouldIgnore) {
 					if (!response.ok) {
-						throw new Error(`Failed to fetch: ${response.status}`);
+						const errorBody = await response.json().catch(() => null);
+						const message =
+							errorBody?.error ?? `Failed to fetch: ${response.status}`;
+						throw new Error(message);
 					}
 
 					const data = await response.json();
@@ -278,6 +282,11 @@ function SoundEffectsView() {
 					onScrollCapture={handleScrollWithPosition}
 				>
 					<div className="flex flex-col gap-4">
+						{error && !isLoading && !searchQuery && (
+							<div className="text-muted-foreground text-sm">
+								{error}
+							</div>
+						)}
 						{isLoading && !searchQuery && (
 							<div className="text-muted-foreground text-sm">
 								Loading sounds...
@@ -487,7 +496,175 @@ function SavedSoundsView() {
 }
 
 function SongsView() {
-	return <div>Songs</div>;
+	const [songs, setSongs] = useState<SoundEffect[]>([]);
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [playingId, setPlayingId] = useState<number | null>(null);
+	const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(
+		null,
+	);
+	const [page, setPage] = useState(1);
+	const [hasNextPage, setHasNextPage] = useState(false);
+	const [isLoadingMore, setIsLoadingMore] = useState(false);
+	const [hasLoaded, setHasLoaded] = useState(false);
+
+	const { scrollAreaRef, handleScroll } = useInfiniteScroll({
+		onLoadMore: async () => {
+			if (isLoadingMore || !hasNextPage) return;
+			setIsLoadingMore(true);
+			try {
+				const nextPage = page + 1;
+				const params = new URLSearchParams({
+					type: "songs",
+					page: nextPage.toString(),
+					page_size: "30",
+				});
+				if (searchQuery.trim()) {
+					params.set("q", searchQuery);
+				}
+				const response = await apiFetch(
+					`/api/sounds/search?${params.toString()}`,
+				);
+				if (response.ok) {
+					const data = await response.json();
+					setSongs((previous) => [...previous, ...data.results]);
+					setPage(nextPage);
+					setHasNextPage(!!data.next);
+				}
+			} finally {
+				setIsLoadingMore(false);
+			}
+		},
+		hasMore: hasNextPage,
+		isLoading: isLoadingMore,
+	});
+
+	useEffect(() => {
+		if (hasLoaded && !searchQuery.trim()) return;
+
+		let ignore = false;
+
+		const fetchSongs = async () => {
+			setIsLoading(true);
+			setError(null);
+			try {
+				const params = new URLSearchParams({
+					type: "songs",
+					page: "1",
+					page_size: "30",
+					sort: "popular",
+				});
+				if (searchQuery.trim()) {
+					params.set("q", searchQuery);
+				}
+				const response = await apiFetch(
+					`/api/sounds/search?${params.toString()}`,
+				);
+				if (!ignore) {
+					if (!response.ok) {
+						const errorBody = await response.json().catch(() => null);
+						throw new Error(
+							errorBody?.error ?? `Failed to fetch: ${response.status}`,
+						);
+					}
+					const data = await response.json();
+					setSongs(data.results);
+					setPage(1);
+					setHasNextPage(!!data.next);
+					setHasLoaded(true);
+				}
+			} catch (fetchError) {
+				if (!ignore) {
+					setError(
+						fetchError instanceof Error
+							? fetchError.message
+							: "Failed to load songs",
+					);
+				}
+			} finally {
+				if (!ignore) {
+					setIsLoading(false);
+				}
+			}
+		};
+
+		const timeoutId = setTimeout(fetchSongs, searchQuery ? 300 : 100);
+		return () => {
+			ignore = true;
+			clearTimeout(timeoutId);
+		};
+	}, [searchQuery, hasLoaded]);
+
+	const playSound = ({ sound }: { sound: SoundEffect }) => {
+		if (playingId === sound.id) {
+			audioElement?.pause();
+			setPlayingId(null);
+			return;
+		}
+
+		audioElement?.pause();
+
+		if (sound.previewUrl) {
+			const audio = new Audio(sound.previewUrl);
+			audio.addEventListener("ended", () => setPlayingId(null));
+			audio.addEventListener("error", () => setPlayingId(null));
+			audio.play().catch(() => setPlayingId(null));
+			setAudioElement(audio);
+			setPlayingId(sound.id);
+		}
+	};
+
+	return (
+		<div className="mt-1 flex h-full flex-col gap-5">
+			<Input
+				placeholder="Search songs"
+				className="w-full"
+				containerClassName="w-full"
+				value={searchQuery}
+				onChange={({ currentTarget }) => setSearchQuery(currentTarget.value)}
+				showClearIcon
+				onClear={() => setSearchQuery("")}
+			/>
+
+			<div className="relative h-full overflow-hidden">
+				<ScrollArea
+					className="h-full flex-1"
+					ref={scrollAreaRef}
+					onScrollCapture={handleScroll}
+				>
+					<div className="flex flex-col gap-4">
+						{error && !isLoading && (
+							<div className="text-muted-foreground text-sm">{error}</div>
+						)}
+						{isLoading && (
+							<div className="text-muted-foreground text-sm">
+								Loading songs...
+							</div>
+						)}
+						{songs.map((sound) => (
+							<AudioItem
+								key={sound.id}
+								sound={sound}
+								isPlaying={playingId === sound.id}
+								onPlay={playSound}
+							/>
+						))}
+						{!isLoading && songs.length === 0 && !error && (
+							<div className="text-muted-foreground text-sm">
+								{searchQuery ? "No songs found" : "No songs available"}
+							</div>
+						)}
+						{isLoadingMore && (
+							<div className="text-muted-foreground py-4 text-center text-sm">
+								Loading more songs...
+							</div>
+						)}
+					</div>
+				</ScrollArea>
+			</div>
+		</div>
+	);
 }
 
 interface AudioItemProps {

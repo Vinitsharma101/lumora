@@ -38,7 +38,7 @@ class CharacterConsistencyPipeline:
                     prompt=prompt,
                     width=1024,
                     height=1024,
-                    model="dev",
+                    model="flux-schnell",
                     wait=True,
                 )
                 output_url = result.get("output_url")
@@ -50,6 +50,11 @@ class CharacterConsistencyPipeline:
                     reference_urls[angle_name] = stored
             except Exception as e:
                 logger.error(f"Failed generating {angle_name} reference: {e}")
+
+        if not reference_urls:
+            logger.warning("All reference sheet angles failed, returning empty")
+        elif len(reference_urls) < len(angles):
+            logger.warning(f"Partial reference sheet: got {len(reference_urls)}/{len(angles)} angles")
 
         return reference_urls
 

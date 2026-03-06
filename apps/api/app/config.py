@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://opencut:opencut@localhost:5432/opencut"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres.your-ref:your-password@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
 
     # Auth
     JWT_SECRET: str = "change-me-in-production"
@@ -17,9 +17,6 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000"
-
-    # Freesound
-    FREESOUND_API_KEY: str | None = None
 
     # AI Providers
     ANTHROPIC_API_KEY: str | None = None

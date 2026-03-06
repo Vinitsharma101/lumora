@@ -48,11 +48,9 @@ This checklist helps you verify that the Next.js frontend and FastAPI backend ar
 
 ## ✅ Docker Services
 
-- [ ] **PostgreSQL**
-  - [ ] Running on port 5432
-  - [ ] Database: `opencut`
-  - [ ] User: `opencut`
-  - [ ] Command: `docker compose up -d db`
+- [ ] **PostgreSQL (Supabase)**
+  - [ ] Supabase project created
+  - [ ] DATABASE_URL configured with Supabase connection string
 
 - [ ] **Redis**
   - [ ] Running on port 6379
@@ -63,13 +61,6 @@ This checklist helps you verify that the Next.js frontend and FastAPI backend ar
   - [ ] Command: `docker compose up -d serverless-redis-http`
 
 ## ✅ Services Running
-
-- [ ] **PostgreSQL**
-
-  ```bash
-  curl -v postgresql://opencut:opencut@localhost:5432/opencut
-  # or: docker compose ps db
-  ```
 
 - [ ] **Redis**
 
@@ -152,9 +143,9 @@ console.log(response.headers.get("access-control-allow-origin"));
 
 ### "Database Connection Error"
 
-- [ ] PostgreSQL running: `docker compose ps db`
-- [ ] Connection string correct: `DATABASE_URL=postgresql+asyncpg://opencut:opencut@localhost:5432/opencut`
-- [ ] Migrations applied: `cd apps/api && alembic upgrade head`
+- [ ] Supabase project is active
+- [ ] Connection string correct in `apps/api/.env`
+- [ ] Migrations applied via Supabase SQL editor or `cd apps/web && bun run db:push:local`
 
 ## 📚 Key Files
 
@@ -171,8 +162,8 @@ console.log(response.headers.get("access-control-allow-origin"));
 ## 🚀 Quick Start
 
 ```bash
-# 1. Start Docker services
-docker compose up -d db redis serverless-redis-http
+# 1. Start Docker services (Redis only, DB is on Supabase)
+docker compose up -d redis serverless-redis-http
 
 # 2. Start FastAPI backend (Terminal 1)
 cd apps/api

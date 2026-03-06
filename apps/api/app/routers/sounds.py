@@ -14,60 +14,41 @@ async def search_sounds(
     request: Request,
     q: str | None = Query(None),
     type: str | None = Query(None),
-    page: int = Query(1, ge=1, le=1000),
+    page: int = Query(1, ge=1, le=100),
     page_size: int = Query(20, ge=1, le=150),
-    sort: str = Query("downloads"),
-    min_rating: float = Query(3, ge=0, le=5),
+    sort: str = Query("popular"),
     commercial_only: bool = Query(True),
 ):
     await check_rate_limit(request)
 
-    if not settings.FREESOUND_API_KEY:
+    if not settings.PIXABAY_API_KEY:
         return JSONResponse(
-            {"error": "Freesound API key not configured. Set FREESOUND_API_KEY."},
+            {"error": "Pixabay API key not configured. Set PIXABAY_API_KEY."},
             status_code=400,
         )
 
-    if type == "songs":
-        return JSONResponse(
-            {
-                "error": "Songs are not available yet",
-                "message": "Song search functionality is coming soon. Try searching for sound effects instead.",
-            },
-            status_code=501,
-        )
+    is_songs = type == "songs"
 
-    sort_param = _build_sort_parameter(q, sort)
-
-    params = {
-        "query": q or "",
-        "token": settings.FREESOUND_API_KEY,
+    params: dict[str, str] = {
+        "key": settings.PIXABAY_API_KEY,
+        "q": q or ("music" if is_songs else "sound effect"),
+        "per_page": str(min(page_size, 200)),
         "page": str(page),
-        "page_size": str(page_size),
-        "sort": sort_param,
-        "fields": (
-            "id,name,description,url,previews,download,duration,filesize,"
-            "type,channels,bitrate,bitdepth,samplerate,username,tags,"
-            "license,created,num_downloads,avg_rating,num_ratings"
-        ),
+        "order": "popular" if sort in ("popular", "downloads") else "latest",
     }
 
-    is_effects_search = type == "effects" or type is None
-    filters = []
-    if is_effects_search:
-        filters = _build_effects_filters(min_rating, commercial_only)
+    # Pixabay doesn't have an audio endpoint, so we search videos filtered by
+    # category=music for songs and short-duration videos for sound effects.
+    if is_songs:
+        params["category"] = "music"
+    else:
+        params["category"] = "music"
 
     client = await get_http_client()
-    url = "https://freesound.org/apiv2/search/text/"
-
-    # Build URL with filters
-    query_parts = [f"{k}={v}" for k, v in params.items()]
-    for f in filters:
-        query_parts.append(f"filter={f}")
-    full_url = f"{url}?{'&'.join(query_parts)}"
+    url = "https://pixabay.com/api/videos/"
 
     try:
-        response = await client.get(full_url)
+        response = await client.get(url, params=params)
     except httpx.HTTPError:
         return JSONResponse({"error": "Failed to search sounds"}, status_code=502)
 
@@ -75,69 +56,68 @@ async def search_sounds(
         return JSONResponse({"error": "Failed to search sounds"}, status_code=response.status_code)
 
     data = response.json()
+    hits = data.get("hits", [])
 
-    transformed_results = [_transform_result(r) for r in data.get("results", [])]
+    # Filter by duration: effects <= 30s, songs > 10s
+    if is_songs:
+        hits = [h for h in hits if h.get("duration", 0) > 10]
+    else:
+        hits = [h for h in hits if h.get("duration", 0) <= 60]
+
+    transformed_results = [_transform_pixabay_hit(h) for h in hits]
+
+    total = data.get("totalHits", 0)
+    has_next = page * page_size < total
 
     return {
-        "count": data.get("count", 0),
-        "next": data.get("next"),
-        "previous": data.get("previous"),
+        "count": total,
+        "next": f"page={page + 1}" if has_next else None,
+        "previous": f"page={page - 1}" if page > 1 else None,
         "results": transformed_results,
         "query": q or "",
         "type": type or "effects",
         "page": page,
         "pageSize": page_size,
         "sort": sort,
-        "minRating": min_rating,
     }
 
 
-def _build_sort_parameter(query: str | None, sort: str) -> str:
-    if not query:
-        return f"{sort}_desc"
-    return "score" if sort == "score" else f"{sort}_desc"
+def _transform_pixabay_hit(hit: dict) -> dict:
+    videos = hit.get("videos", {})
+    # Prefer tiny/small for audio-like usage (smaller download)
+    video_file = videos.get("tiny") or videos.get("small") or videos.get("medium") or {}
+    download_url = video_file.get("url", "")
 
-
-def _build_effects_filters(min_rating: float, commercial_only: bool) -> list[str]:
-    filters = [
-        "duration:[* TO 30.0]",
-        f"avg_rating:[{min_rating} TO *]",
-    ]
-
-    if commercial_only:
-        filters.append(
-            'license:("Attribution" OR "Creative Commons 0" OR "Attribution Noncommercial" OR "Attribution Commercial")'
-        )
-
-    filters.append(
-        "tag:sound-effect OR tag:sfx OR tag:foley OR tag:ambient OR tag:nature "
-        "OR tag:mechanical OR tag:electronic OR tag:impact OR tag:whoosh OR tag:explosion"
+    picture_id = hit.get("picture_id", "")
+    preview_url = (
+        f"https://i.vimeocdn.com/video/{picture_id}_295x166.jpg"
+        if picture_id
+        else ""
     )
 
-    return filters
+    tags = hit.get("tags", "")
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if isinstance(tags, str) else tags
+    name = tag_list[0].title() if tag_list else f"Sound {hit.get('id', '')}"
 
-
-def _transform_result(result: dict) -> dict:
-    previews = result.get("previews") or {}
     return {
-        "id": result.get("id"),
-        "name": result.get("name", ""),
-        "description": result.get("description", ""),
-        "url": result.get("url", ""),
-        "previewUrl": previews.get("preview-hq-mp3") or previews.get("preview-lq-mp3"),
-        "downloadUrl": result.get("download"),
-        "duration": result.get("duration", 0),
-        "filesize": result.get("filesize", 0),
-        "type": result.get("type", ""),
-        "channels": result.get("channels", 0),
-        "bitrate": result.get("bitrate", 0),
-        "bitdepth": result.get("bitdepth", 0),
-        "samplerate": result.get("samplerate", 0),
-        "username": result.get("username", ""),
-        "tags": result.get("tags", []),
-        "license": result.get("license", ""),
-        "created": result.get("created", ""),
-        "downloads": result.get("num_downloads", 0),
-        "rating": result.get("avg_rating", 0),
-        "ratingCount": result.get("num_ratings", 0),
+        "id": hit.get("id", 0),
+        "name": name,
+        "description": tags if isinstance(tags, str) else ", ".join(tags),
+        "url": hit.get("pageURL", ""),
+        "previewUrl": preview_url,
+        "downloadUrl": download_url,
+        "duration": hit.get("duration", 0),
+        "filesize": video_file.get("size", 0),
+        "type": "video",
+        "channels": 0,
+        "bitrate": 0,
+        "bitdepth": 0,
+        "samplerate": 0,
+        "username": hit.get("user", ""),
+        "tags": tag_list,
+        "license": "Pixabay License",
+        "created": "",
+        "downloads": hit.get("downloads", 0),
+        "rating": 0,
+        "ratingCount": 0,
     }

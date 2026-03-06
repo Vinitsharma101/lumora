@@ -8,7 +8,7 @@ import {
 	Music,
 	Layers,
 	Search,
-	Github,
+	Bot,
 } from "lucide-react";
 
 const features = [
@@ -48,10 +48,10 @@ const features = [
 		span: "lg:col-span-1",
 	},
 	{
-		icon: Github,
-		title: "Fully Open Source",
+		icon: Bot,
+		title: "Agentic AI Pipeline",
 		description:
-			"No vendor lock-in. Self-host it, fork it, extend it. 40,000+ stars on GitHub and growing.",
+			"Autonomous AI agents that handle video generation, rendering, and effects. Describe what you want, and the agents deliver.",
 		span: "lg:col-span-2",
 	},
 ];

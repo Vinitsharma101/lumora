@@ -141,7 +141,7 @@ export const useKeybindingsStore = create<KeybindingsState>()(
 			},
 		}),
 		{
-			name: "opencut-keybindings",
+			name: "gracecut-keybindings",
 			version: CURRENT_VERSION,
 			partialize: (state) => ({
 				keybindings: state.keybindings,

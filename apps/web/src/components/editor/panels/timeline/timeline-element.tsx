@@ -420,7 +420,7 @@ function ElementContent({
 	if (element.type === "text") {
 		return (
 			<div className="flex size-full items-center justify-start pl-2">
-				<span className="truncate text-xs text-white">{element.content}</span>
+				<span className="truncate text-xs text-black/80">{element.content}</span>
 			</div>
 		);
 	}
@@ -439,7 +439,7 @@ function ElementContent({
 					height={20}
 					unoptimized
 				/>
-				<span className="truncate text-xs text-white">{element.name}</span>
+				<span className="truncate text-xs text-black/80">{element.name}</span>
 			</div>
 		);
 	}
@@ -510,6 +510,11 @@ function ElementContent({
 							bottom: isSelected ? "0.25rem" : "0rem",
 						}}
 					/>
+					<div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center px-2 py-0.5">
+						<span className="truncate text-[10px] font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+							{element.name}
+						</span>
+					</div>
 				</div>
 			</div>
 		);

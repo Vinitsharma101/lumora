@@ -16,6 +16,7 @@ import { AdjustmentView } from "./views/adjustment";
 import { AIGenerateView } from "./views/ai-generate";
 import { AutoEditView } from "./views/auto-edit";
 import { CollaborateView } from "./views/collaborate";
+import { StockMediaView } from "./views/stock-media";
 
 export function AssetsPanel() {
 	const { activeTab } = useAssetsPanelStore();
@@ -23,6 +24,7 @@ export function AssetsPanel() {
 	const viewMap: Record<Tab, React.ReactNode> = {
 		media: <MediaView />,
 		sounds: <SoundsView />,
+		stock: <StockMediaView />,
 		text: <TextView />,
 		stickers: <StickersView />,
 		effects: <EffectsView />,

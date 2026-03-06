@@ -7,7 +7,7 @@ import {
 	TextIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { OcVideoIcon } from "@opencut/ui/icons";
+import { OcVideoIcon } from "@gracecut/ui/icons";
 
 export const DEFAULT_TRANSFORM: Transform = {
 	scale: 1,
@@ -21,16 +21,16 @@ export const DEFAULT_BOOKMARK_COLOR = "#009dff";
 
 export const TRACK_COLORS: Record<TrackType, { background: string }> = {
 	video: {
-		background: "transparent",
+		background: "bg-[#93C5FD]",
 	},
 	text: {
-		background: "bg-[#5DBAA0]",
+		background: "bg-[#86EFAC]",
 	},
 	audio: {
-		background: "bg-[#915DBE]",
+		background: "bg-[#C4B5FD]",
 	},
 	sticker: {
-		background: "bg-amber-500",
+		background: "bg-[#FCD34D]",
 	},
 } as const;
 

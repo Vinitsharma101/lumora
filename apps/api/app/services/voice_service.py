@@ -108,17 +108,26 @@ class VoiceService:
         except Exception as e:
             logger.warning(f"ElevenLabs TTS failed for {character.get('name')}: {e}")
 
-        # Fallback to Replicate XTTS-v2
+        # Fallback: generate a reference sample via ElevenLabs default voice, then use XTTS-v2
         try:
-            result = await self.replicate.clone_voice_and_speak(
-                text=text,
-                speaker_wav_url="",  # Would need reference audio
-                language="en",
+            default_voice_id = VOICE_ARCHETYPES["narrator_male"]
+            ref_bytes = await self.elevenlabs.text_to_speech(
+                text="Hello, this is a reference sample for voice cloning.",
+                voice_id=default_voice_id,
             )
-            output_url = result.get("output_url")
-            if output_url:
-                from app.services.storage_service import upload_from_url
-                return await upload_from_url(output_url, "mp3", "audio/mpeg", prefix="dialog")
+            if ref_bytes:
+                ref_url = await upload_bytes(
+                    ref_bytes, "mp3", "audio/mpeg", prefix="voice_ref"
+                )
+                result = await self.replicate.clone_voice_and_speak(
+                    text=text,
+                    speaker_wav_url=ref_url,
+                    language="en",
+                )
+                output_url = result.get("output_url")
+                if output_url:
+                    from app.services.storage_service import upload_from_url
+                    return await upload_from_url(output_url, "mp3", "audio/mpeg", prefix="dialog")
         except Exception as e:
             logger.error(f"XTTS-v2 fallback also failed: {e}")
 

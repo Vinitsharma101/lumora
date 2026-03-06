@@ -18,8 +18,6 @@ const webEnvSchema = z.object({
 		.or(z.string().startsWith("postgresql://"))
 		.optional(),
 	MARBLE_WORKSPACE_KEY: z.string().optional(),
-	FREESOUND_CLIENT_ID: z.string().optional(),
-	FREESOUND_API_KEY: z.string().optional(),
 
 	// Transcription (server-side, optional)
 	CLOUDFLARE_ACCOUNT_ID: z.string().optional(),

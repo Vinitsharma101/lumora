@@ -41,6 +41,11 @@ class AgentApproveRequest(BaseModel):
     feedback: str | None = None
 
 
+class AgentRegenerateRequest(BaseModel):
+    scene_index: int
+    modified_prompt: str | None = None
+
+
 class CharacterRegisterRequest(BaseModel):
     name: str
     description: str
@@ -161,6 +166,35 @@ async def approve_checkpoint(session_id: str, request: AgentApproveRequest):
         await orchestrator.save_state()
 
     return {"status": "approved", "checkpoint": request.checkpoint}
+
+
+@router.post("/regenerate/{session_id}", status_code=status.HTTP_202_ACCEPTED)
+async def regenerate_scene(session_id: str, request: AgentRegenerateRequest):
+    """Regenerate a specific scene within an active pipeline session."""
+    try:
+        orchestrator = await AgentOrchestrator.get_session(session_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    scene_plan = orchestrator.state.get("scene_plan", [])
+    if request.scene_index >= len(scene_plan):
+        raise HTTPException(status_code=400, detail="Invalid scene index")
+
+    if request.modified_prompt:
+        scene_plan[request.scene_index]["description"] = request.modified_prompt
+        scene_plan[request.scene_index]["prompt"] = request.modified_prompt
+        orchestrator.state["scene_plan"] = scene_plan
+        await orchestrator.save_state()
+
+    from app.worker import get_arq_pool
+    pool = await get_arq_pool()
+    await pool.enqueue_job("process_movie_scene", session_id, request.scene_index)
+
+    return {
+        "status": "regenerating",
+        "scene_index": request.scene_index,
+        "message": f"Scene {request.scene_index} queued for regeneration.",
+    }
 
 
 @router.post("/character/{project_id}")

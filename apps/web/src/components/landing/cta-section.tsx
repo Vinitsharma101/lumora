@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Star } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "../ui/button";
-import { SOCIAL_LINKS } from "@/constants/site-constants";
 import { SectionWrapper } from "./section-wrapper";
 
 export function CTASection() {
@@ -16,7 +15,7 @@ export function CTASection() {
 						Start editing for free
 					</h2>
 					<p className="text-muted-foreground mx-auto mt-4 max-w-xl text-lg">
-						Open source. No credit card required. Runs in your
+						No credit card required. AI-powered editing runs in your
 						browser.
 					</p>
 					<div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
@@ -28,20 +27,6 @@ export function CTASection() {
 							>
 								Get started
 								<ArrowRight className="ml-1 size-4" />
-							</Button>
-						</Link>
-						<Link
-							href={SOCIAL_LINKS.github}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							<Button
-								variant="outline"
-								size="lg"
-								className="h-12 px-8 text-base"
-							>
-								<Star className="mr-1 size-4" />
-								Star on GitHub
 							</Button>
 						</Link>
 					</div>

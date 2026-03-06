@@ -8,7 +8,9 @@ export function AIChatPanel() {
 	return (
 		<div className="panel bg-background flex h-full flex-col rounded-sm border overflow-hidden">
 			<AIChatHeader />
-			<AIChatMessages />
+			<div className="min-h-0 flex-1">
+				<AIChatMessages />
+			</div>
 			<AIChatInput />
 		</div>
 	);

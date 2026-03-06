@@ -11,19 +11,28 @@ import { NextResponse } from "next/server";
  */
 let cachedBundlePath: string | null = null;
 
+const RENDER_TIMEOUT_MS = 60_000;
+
 async function getBundle(): Promise<string> {
 	if (cachedBundlePath) {
+		console.log("[render-motion] Using cached bundle:", cachedBundlePath);
 		return cachedBundlePath;
 	}
 
-	const bundled = await bundle({
-		entryPoint: join(process.cwd(), "src/lib/remotion/root.tsx"),
-		// Disable the webpack dev server since we only need static rendering
-		webpackOverride: (config) => config,
-	});
+	console.log("[render-motion] Bundling Remotion project...");
+	try {
+		const bundled = await bundle({
+			entryPoint: join(process.cwd(), "src/lib/remotion/root.tsx"),
+			webpackOverride: (config) => config,
+		});
 
-	cachedBundlePath = bundled;
-	return bundled;
+		console.log("[render-motion] Bundle created:", bundled);
+		cachedBundlePath = bundled;
+		return bundled;
+	} catch (error) {
+		cachedBundlePath = null;
+		throw error;
+	}
 }
 
 interface RenderMotionRequest {
@@ -58,6 +67,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 		const bundlePath = await getBundle();
 
 		// Select the composition and override its config
+		console.log("[render-motion] Selecting composition:", compositionId);
 		const composition = await selectComposition({
 			serveUrl: bundlePath,
 			id: compositionId,
@@ -75,16 +85,27 @@ export async function POST(request: Request): Promise<NextResponse> {
 		// Render to a temporary file
 		const outputPath = join(
 			tmpdir(),
-			`opencut-motion-${compositionId}-${Date.now()}.mp4`,
+			`gracecut-motion-${compositionId}-${Date.now()}.mp4`,
 		);
 
-		await renderMedia({
+		console.log("[render-motion] Rendering to:", outputPath);
+		const renderPromise = renderMedia({
 			composition,
 			serveUrl: bundlePath,
 			codec: "h264",
 			outputLocation: outputPath,
 			inputProps: props,
 		});
+
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			setTimeout(
+				() => reject(new Error("Render timed out after 60s")),
+				RENDER_TIMEOUT_MS,
+			);
+		});
+
+		await Promise.race([renderPromise, timeoutPromise]);
+		console.log("[render-motion] Render complete");
 
 		// Read the rendered file and return it
 		const videoBuffer = await readFile(outputPath);

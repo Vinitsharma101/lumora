@@ -1,35 +1,38 @@
 "use client";
 
-import Link from "next/link";
-import { SOCIAL_LINKS } from "@/constants/site-constants";
 import { SectionWrapper } from "./section-wrapper";
-import { FaGithub } from "react-icons/fa6";
-import { RiDiscordFill, RiTwitterXLine } from "react-icons/ri";
+import { Bot, Layers, Zap, Sparkles, Film, Palette } from "lucide-react";
 
-const stats = [
-	{ label: "GitHub Stars", value: "40k+" },
-	{ label: "Contributors", value: "400+" },
-	{ label: "Forks", value: "6k+" },
-];
-
-const socialLinks = [
+const capabilities = [
 	{
-		label: "GitHub",
-		href: SOCIAL_LINKS.github,
-		icon: FaGithub,
-		description: "Star us, fork us, contribute",
+		icon: Bot,
+		title: "Agentic AI Pipeline",
+		description: "AI agents that understand your creative vision and execute complex edits autonomously.",
 	},
 	{
-		label: "Discord",
-		href: SOCIAL_LINKS.discord,
-		icon: RiDiscordFill,
-		description: "Join the community chat",
+		icon: Zap,
+		title: "Real-time Processing",
+		description: "Instant previews and rendering powered by optimized cloud infrastructure.",
 	},
 	{
-		label: "X / Twitter",
-		href: SOCIAL_LINKS.x,
-		icon: RiTwitterXLine,
-		description: "Follow for updates",
+		icon: Layers,
+		title: "Multi-track Editing",
+		description: "Professional timeline with unlimited video, audio, and effects tracks.",
+	},
+	{
+		icon: Sparkles,
+		title: "AI Voice & Music",
+		description: "Generate voiceovers and background music that match your content automatically.",
+	},
+	{
+		icon: Film,
+		title: "Smart Captions",
+		description: "AI-powered transcription with customizable styles, fonts, and animations.",
+	},
+	{
+		icon: Palette,
+		title: "Motion Graphics",
+		description: "Professional titles, lower-thirds, and animations from a growing template library.",
 	},
 ];
 
@@ -38,47 +41,28 @@ export function Community() {
 		<SectionWrapper>
 			<div className="text-center">
 				<h2 className="text-3xl font-bold tracking-tight md:text-5xl">
-					Built in the open
+					Platform Capabilities
 				</h2>
 				<p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-lg">
-					OpenCut is free and open source, shaped by a growing
-					community of developers and creators.
+					GraceCut combines powerful editing tools with an agentic AI
+					pipeline to transform your creative workflow.
 				</p>
 			</div>
 
-			<div className="mt-16 grid grid-cols-3 gap-4">
-				{stats.map((stat) => (
+			<div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				{capabilities.map((item) => (
 					<div
-						key={stat.label}
-						className="rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center"
+						key={item.title}
+						className="group flex items-start gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-6 transition-colors hover:border-white/20 hover:bg-white/[0.05]"
 					>
-						<div className="text-3xl font-bold md:text-4xl">
-							{stat.value}
-						</div>
-						<div className="text-muted-foreground mt-1 text-sm">
-							{stat.label}
-						</div>
-					</div>
-				))}
-			</div>
-
-			<div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-				{socialLinks.map((link) => (
-					<Link
-						key={link.label}
-						href={link.href}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="group flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-6 transition-colors hover:border-white/20 hover:bg-white/[0.05]"
-					>
-						<link.icon className="size-6 shrink-0" />
+						<item.icon className="size-6 shrink-0 text-blue-400" />
 						<div>
-							<div className="font-medium">{link.label}</div>
-							<div className="text-muted-foreground text-sm">
-								{link.description}
+							<div className="font-medium">{item.title}</div>
+							<div className="text-muted-foreground mt-1 text-sm">
+								{item.description}
 							</div>
 						</div>
-					</Link>
+					</div>
 				))}
 			</div>
 		</SectionWrapper>

@@ -4,9 +4,6 @@ FROM base AS builder
 
 WORKDIR /app
 
-ARG FREESOUND_CLIENT_ID
-ARG FREESOUND_API_KEY
-
 COPY package.json package.json
 COPY bun.lock bun.lock
 COPY turbo.json turbo.json
@@ -25,7 +22,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build-time env stubs to pass zod validation
-ENV DATABASE_URL="postgresql://opencut:opencut@localhost:5432/opencut"
+ENV DATABASE_URL="postgresql://postgres:build-placeholder@localhost:5432/postgres"
 ENV BETTER_AUTH_SECRET="build-time-secret"
 ENV UPSTASH_REDIS_REST_URL="http://localhost:8079"
 ENV UPSTASH_REDIS_REST_TOKEN="example_token"
@@ -37,9 +34,6 @@ ENV R2_ACCESS_KEY_ID="build-placeholder"
 ENV R2_SECRET_ACCESS_KEY="build-placeholder"
 ENV R2_BUCKET_NAME="build-placeholder"
 ENV MODAL_TRANSCRIPTION_URL="http://localhost:0"
-
-ENV FREESOUND_CLIENT_ID=$FREESOUND_CLIENT_ID
-ENV FREESOUND_API_KEY=$FREESOUND_API_KEY
 
 WORKDIR /app/apps/web
 RUN bun run build

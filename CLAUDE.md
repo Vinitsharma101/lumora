@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpenCut is a free, open-source, privacy-first video editor for web, desktop, and mobile. The main application is a Next.js 16 web app with a timeline-based editor.
+GraceCut is a closed-source, agentic video editing platform for web, desktop, and mobile. The main application is a Next.js 16 web app with a timeline-based editor. Database is hosted on Supabase (managed PostgreSQL).
 
 ## Monorepo Structure
 
@@ -21,7 +21,7 @@ OpenCut is a free, open-source, privacy-first video editor for web, desktop, and
 # Development
 bun install                  # Install dependencies
 bun dev:web                  # Start dev server (Next.js with Turbopack)
-docker compose up -d db redis serverless-redis-http  # Start local DB + Redis
+docker compose up -d redis serverless-redis-http  # Start Redis (DB is on Supabase)
 
 # Linting & Formatting (Biome)
 bun lint:web                 # Lint check
@@ -123,7 +123,7 @@ Better Auth with email/password, database-backed sessions, Redis rate limiting v
 
 - `/api/auth/[...all]` — Authentication (Better Auth)
 - `/api/ai/*` — AI features (chat with Claude/OpenAI/Gemini, music, voice, stock media)
-- `/api/sounds/search` — FreeSound API integration
+- `/api/sounds/search` — Pixabay sound/music search
 
 ## Contribution Focus Areas
 

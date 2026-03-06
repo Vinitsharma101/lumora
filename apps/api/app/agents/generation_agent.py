@@ -7,11 +7,16 @@ Injects character consistency prompts from Pinecone embeddings.
 
 import asyncio
 import logging
+import time
 from typing import Optional
 
 from app.services.ai_video.replicate_provider import ReplicateProvider
 from app.services.ai_video.elevenlabs_provider import ElevenLabsProvider
 from app.services.storage_service import upload_bytes, upload_from_url
+from app.services.generation_cache import get_cached, set_cached
+from app.services.pipeline_metrics import metrics
+from app.services.character_consistency_pipeline import CharacterConsistencyPipeline
+from app.services.voice_service import VoiceService
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +73,13 @@ def _augment_prompt_with_cinematography(prompt: str, camera: dict, lighting: dic
 class GenerationAgent:
     """Generates all media assets for a scene plan in parallel."""
 
-    def __init__(self):
+    def __init__(self, session_id: str | None = None):
         self.replicate = ReplicateProvider()
         self.elevenlabs = ElevenLabsProvider()
+        self.voice_service = VoiceService()
+        self.consistency_pipeline = CharacterConsistencyPipeline()
+        self._character_references: dict[str, dict] = {}
+        self._session_id = session_id
 
     async def run(self, state: dict) -> dict:
         """Generate assets for all scenes concurrently."""
@@ -165,7 +174,30 @@ class GenerationAgent:
 
         result = {"scene_id": scene_id, "video_url": None, "image_url": None, "audio_url": None}
 
-        # Generate visual asset using run_and_wait, then upload to Supabase
+        # Generate character reference sheets if needed (cached per character)
+        char_ids = scene.get("character_ids", [])
+        for cid in char_ids:
+            if cid not in self._character_references and cid in characters:
+                char = characters[cid]
+                if char.get("description"):
+                    try:
+                        refs = await self.consistency_pipeline.generate_reference_sheet(char["description"])
+                        if refs:
+                            self._character_references[cid] = refs
+                    except Exception as e:
+                        logger.warning(f"Reference sheet generation failed for {cid}: {e}")
+
+        # Check generation cache before making expensive API calls
+        model_name = "text_to_video" if visual_type == "text_to_video" else "text_to_image"
+        cached = get_cached(full_prompt, model_name)
+        if cached:
+            logger.info(f"Cache hit for scene {scene_id}")
+            result.update(cached)
+            return result
+
+        # Generate visual asset with metrics tracking
+        gen_start = time.time()
+        gen_success = False
         try:
             if visual_type == "text_to_video":
                 gen_result = await self.replicate.text_to_video(
@@ -180,22 +212,33 @@ class GenerationAgent:
                         prefix=f"scenes/{scene_id}"
                     )
                     result["video_url"] = stored_url
+                    gen_success = True
                 result["prediction_id"] = gen_result.get("prediction_id")
 
             elif visual_type in ("text_to_image", "static_image"):
-                gen_result = await self.replicate.text_to_image(
-                    prompt=full_prompt,
-                    width=1024,
-                    height=576,
-                    wait=True,
-                )
-                output_url = gen_result.get("output_url")
-                if output_url:
-                    stored_url = await upload_from_url(
-                        output_url, "png", "image/png",
-                        prefix=f"scenes/{scene_id}"
+                # Use character-consistent generation when references exist
+                if char_ids and any(cid in self._character_references for cid in char_ids):
+                    gen_result = await self.consistency_pipeline.generate_consistent_scene(
+                        prompt=full_prompt,
+                        character_ids=char_ids,
+                        character_references=self._character_references,
                     )
-                    result["image_url"] = stored_url
+                else:
+                    gen_result = await self.replicate.text_to_image(
+                        prompt=full_prompt,
+                        width=1024,
+                        height=576,
+                        wait=True,
+                    )
+                output_url = gen_result.get("output_url") or gen_result.get("stored_url")
+                if output_url:
+                    if not gen_result.get("stored_url"):
+                        output_url = await upload_from_url(
+                            output_url, "png", "image/png",
+                            prefix=f"scenes/{scene_id}"
+                        )
+                    result["image_url"] = output_url
+                    gen_success = True
                 result["prediction_id"] = gen_result.get("prediction_id")
 
             elif visual_type == "image_to_video":
@@ -213,24 +256,40 @@ class GenerationAgent:
                             prefix=f"scenes/{scene_id}"
                         )
                         result["video_url"] = stored_url
+                        gen_success = True
                     result["prediction_id"] = gen_result.get("prediction_id")
 
         except Exception as e:
             logger.error(f"Visual generation failed for {scene_id}: {e}")
             result["visual_error"] = str(e)
+        finally:
+            gen_duration = time.time() - gen_start
+            metrics.record_generation(
+                model=model_name,
+                duration_seconds=gen_duration,
+                success=gen_success,
+                cost_usd=0.50 if visual_type == "text_to_video" else 0.05,
+                session_id=self._session_id,
+            )
 
-        # Generate voiceover if specified, upload to storage
+        # Cache successful generation results
+        if gen_success:
+            cache_data = {k: v for k, v in result.items() if k in ("video_url", "image_url", "scene_id")}
+            set_cached(full_prompt, model_name, cache_data)
+
+        # Generate voiceover using VoiceService for per-character voice selection
         voiceover = scene.get("voiceover")
         if voiceover and voiceover.get("text"):
             try:
-                audio_bytes = await self.elevenlabs.text_to_speech(
+                speaker_id = voiceover.get("speaker")
+                emotion = scene.get("mood", "neutral")
+                character = characters.get(speaker_id, {"char_id": speaker_id or "narrator"})
+                audio_url = await self.voice_service.generate_dialog(
                     text=voiceover["text"],
+                    character=character,
+                    emotion=emotion,
                 )
-                if audio_bytes:
-                    audio_url = await upload_bytes(
-                        audio_bytes, "mp3", "audio/mpeg",
-                        prefix=f"voiceover/{scene_id}"
-                    )
+                if audio_url:
                     result["audio_url"] = audio_url
                     result["voiceover_text"] = voiceover["text"]
             except Exception as e:
@@ -239,12 +298,29 @@ class GenerationAgent:
         return result
 
     async def _generate_music(self, music_track: dict) -> Optional[str]:
-        """Generate background music via Replicate MusicGen, fallback to ElevenLabs SFX."""
+        """Generate background music via Suno, fallback to Replicate MusicGen, then ElevenLabs SFX."""
         description = music_track.get("description", "background music")
         mood = music_track.get("mood", "")
+        style = music_track.get("style")
         prompt = f"{description}. Mood: {mood}" if mood else description
 
-        # Try MusicGen via Replicate first
+        # Try Suno first (highest quality full songs)
+        try:
+            from app.services.ai_video.suno_provider import SunoProvider
+            suno = SunoProvider()
+            suno_result = await suno.generate_music(
+                prompt=prompt,
+                duration=music_track.get("duration", 30),
+                instrumental=True,
+                style=style,
+            )
+            audio_url = suno_result.get("audio_url")
+            if audio_url:
+                return audio_url
+        except Exception as e:
+            logger.warning(f"Suno music generation failed: {e}")
+
+        # Fallback: MusicGen via Replicate
         try:
             gen_result = await self.replicate.generate_music(
                 prompt=prompt,
@@ -258,7 +334,7 @@ class GenerationAgent:
         except Exception as e:
             logger.warning(f"MusicGen via Replicate failed: {e}")
 
-        # Fallback: ElevenLabs sound effect as ambient audio
+        # Last resort: ElevenLabs sound effect as ambient audio
         try:
             audio_bytes = await self.elevenlabs.generate_sound_effect(
                 prompt=f"Background music: {description}",

@@ -2,15 +2,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 function getAuthToken(): string | null {
 	if (typeof window === "undefined") return null;
-	return localStorage.getItem("opencut_token");
+	return localStorage.getItem("gracecut_token");
 }
 
 export function setAuthToken(token: string): void {
-	localStorage.setItem("opencut_token", token);
+	localStorage.setItem("gracecut_token", token);
 }
 
 export function clearAuthToken(): void {
-	localStorage.removeItem("opencut_token");
+	localStorage.removeItem("gracecut_token");
 }
 
 /**

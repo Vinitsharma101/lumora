@@ -86,13 +86,15 @@ function PendingContextBadges({
 	};
 
 	return (
-		<div className="flex flex-wrap items-center gap-1.5 px-3 pb-1 pt-2">
-			<span className="text-xs text-muted-foreground">Context:</span>
+		<div className="flex flex-wrap items-center gap-1.5 px-1 pb-2">
+			<span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+				Context
+			</span>
 			{context.elements.map((element) => (
 				<span
 					key={element.id}
 					className={cn(
-						"inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
+						"inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]",
 						typeColors[element.type] ?? "bg-muted text-muted-foreground",
 					)}
 				>
@@ -127,15 +129,17 @@ function AttachedFileBadges({
 	};
 
 	return (
-		<div className="flex flex-wrap items-center gap-1.5 px-3 pb-1 pt-2">
-			<span className="text-xs text-muted-foreground">Attached:</span>
+		<div className="flex flex-wrap items-center gap-1.5 px-1 pb-2">
+			<span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+				Attached
+			</span>
 			{files.map((file) => {
 				const IconComponent = getFileIcon(file.type);
 				return (
 					<span
 						key={file.id}
 						className={cn(
-							"inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs",
+							"inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px]",
 							typeColors[file.type],
 						)}
 					>
@@ -144,7 +148,7 @@ function AttachedFileBadges({
 						) : (
 							<IconComponent className="size-3" />
 						)}
-						<span className="max-w-[100px] truncate">{file.name}</span>
+						<span className="max-w-[80px] truncate">{file.name}</span>
 						<span className="text-[10px] opacity-60">
 							{formatFileSize(file.size)}
 						</span>
@@ -170,7 +174,6 @@ export function AIChatInput() {
 	const { isStreaming, pendingContext, attachedFiles } = useAIChatStore();
 	const { sendMessage, stopStreaming } = useAIChat();
 
-	// Auto-focus input when pending context arrives
 	useEffect(() => {
 		if (pendingContext && textareaRef.current) {
 			textareaRef.current.focus();
@@ -196,8 +199,8 @@ export function AIChatInput() {
 				mimeType: file.type,
 				size: file.size,
 				localUrl,
-				status: "uploaded", // Local files are ready immediately
-				uploadedUrl: localUrl, // In a full implementation, this would be an API URL
+				status: "uploaded",
+				uploadedUrl: localUrl,
 			};
 
 			store.addAttachedFile(attachedFile);
@@ -208,7 +211,7 @@ export function AIChatInput() {
 		(e: React.ChangeEvent<HTMLInputElement>) => {
 			if (e.target.files && e.target.files.length > 0) {
 				handleFileSelect(e.target.files);
-				e.target.value = ""; // Reset so the same file can be selected again
+				e.target.value = "";
 			}
 		},
 		[handleFileSelect],
@@ -223,7 +226,6 @@ export function AIChatInput() {
 		store.removeAttachedFile(id);
 	}, []);
 
-	// Drag-and-drop handlers
 	const handleDragOver = useCallback((e: React.DragEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -253,14 +255,12 @@ export function AIChatInput() {
 		const trimmed = input.trim();
 		if (!trimmed || isStreaming) return;
 
-		// Build context-enriched message
 		let messageContent = trimmed;
 		if (pendingContext && pendingContext.elements.length > 0) {
 			const contextPrefix = buildContextPrefix(pendingContext);
 			messageContent = `${contextPrefix}\n\n${trimmed}`;
 		}
 
-		// Add file context to message
 		const currentFiles = useAIChatStore.getState().attachedFiles;
 		if (currentFiles.length > 0) {
 			const fileDescriptions = currentFiles
@@ -282,7 +282,6 @@ export function AIChatInput() {
 			textareaRef.current.style.height = "auto";
 		}
 
-		// Clear context and files after sending
 		useAIChatStore.getState().clearPendingContext();
 		useAIChatStore.getState().clearAttachedFiles();
 
@@ -307,18 +306,20 @@ export function AIChatInput() {
 		? `Ask about the selected ${pendingContext.elements.map((element) => formatMediaType(element.type).toLowerCase()).join(", ")}...`
 		: attachedFiles.length > 0
 			? "Describe what to do with the attached files..."
-			: "Describe your edit...";
+			: "Ask anything";
 
 	return (
 		<div
-			className={cn("border-t p-3", isDragOver && "bg-purple-500/5")}
+			className={cn(
+				"px-3 pb-3 pt-1",
+				isDragOver && "bg-purple-500/5",
+			)}
 			onDragOver={handleDragOver}
 			onDragLeave={handleDragLeave}
 			onDrop={handleDrop}
 		>
-			{/* Drag overlay */}
 			{isDragOver && (
-				<div className="mb-2 flex items-center justify-center rounded-lg border-2 border-dashed border-purple-500/40 bg-purple-500/5 py-3">
+				<div className="mb-2 flex items-center justify-center rounded-2xl border-2 border-dashed border-purple-500/40 bg-purple-500/5 py-3">
 					<span className="text-xs text-purple-400">
 						Drop files here to attach
 					</span>
@@ -339,32 +340,12 @@ export function AIChatInput() {
 
 			<div
 				className={cn(
-					"flex items-end gap-2 rounded-lg border bg-background px-3 py-2",
-					"focus-within:ring-1 focus-within:ring-ring",
-					pendingContext && "ring-1 ring-purple-500/30",
-					attachedFiles.length > 0 && "ring-1 ring-amber-500/30",
+					"flex flex-col rounded-2xl border border-border/60 bg-muted/30 px-3 pb-2.5 pt-3",
+					"focus-within:border-border",
+					pendingContext && "border-purple-500/30",
+					attachedFiles.length > 0 && "border-amber-500/30",
 				)}
 			>
-				{/* File upload button */}
-				<Button
-					size="icon"
-					variant="ghost"
-					className="size-7 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
-					onClick={() => fileInputRef.current?.click()}
-					disabled={isStreaming}
-					title="Attach files (images, videos, audio)"
-				>
-					<Plus className="size-4" />
-				</Button>
-				<input
-					ref={fileInputRef}
-					type="file"
-					multiple
-					accept="image/*,video/*,audio/*"
-					className="hidden"
-					onChange={handleFileInputChange}
-				/>
-
 				<textarea
 					ref={textareaRef}
 					value={input}
@@ -372,30 +353,59 @@ export function AIChatInput() {
 					onKeyDown={handleKeyDown}
 					placeholder={placeholderText}
 					rows={1}
-					className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+					className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
 					style={{ fieldSizing: "content", maxHeight: "120px" }}
 					disabled={isStreaming}
 				/>
-				{isStreaming ? (
-					<Button
-						size="icon"
-						className="size-7 shrink-0 rounded-full"
-						onClick={stopStreaming}
-						variant="destructive"
-					>
-						<Square className="size-3" />
-					</Button>
-				) : (
-					<Button
-						size="icon"
-						className="size-7 shrink-0 rounded-full"
-						onClick={handleSubmit}
-						disabled={!input.trim()}
-					>
-						<ArrowUp className="size-3.5" />
-					</Button>
-				)}
+
+				<div className="mt-2 flex items-center justify-between">
+					<div className="flex items-center gap-1">
+						<button
+							type="button"
+							className="flex size-7 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+							onClick={() => fileInputRef.current?.click()}
+							disabled={isStreaming}
+							title="Attach files"
+						>
+							<Plus className="size-4" />
+						</button>
+					</div>
+
+					{isStreaming ? (
+						<Button
+							size="icon"
+							className="size-7 shrink-0 rounded-full"
+							onClick={stopStreaming}
+							variant="destructive"
+						>
+							<Square className="size-3" />
+						</Button>
+					) : (
+						<button
+							type="button"
+							className={cn(
+								"flex size-7 items-center justify-center rounded-full transition-colors",
+								input.trim()
+									? "bg-primary text-primary-foreground hover:bg-primary/90"
+									: "bg-muted-foreground/20 text-muted-foreground/40",
+							)}
+							onClick={handleSubmit}
+							disabled={!input.trim()}
+						>
+							<ArrowUp className="size-3.5" />
+						</button>
+					)}
+				</div>
 			</div>
+
+			<input
+				ref={fileInputRef}
+				type="file"
+				multiple
+				accept="image/*,video/*,audio/*"
+				className="hidden"
+				onChange={handleFileInputChange}
+			/>
 		</div>
 	);
 }

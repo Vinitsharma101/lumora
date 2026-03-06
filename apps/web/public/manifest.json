@@ -1,6 +1,6 @@
 {
-	"name": "OpenCut",
-	"description": "A simple but powerful video editor that gets the job done. In your browser.",
+	"name": "GraceCut",
+	"description": "An agentic video editing platform powered by AI. In your browser.",
 	"display": "standalone",
 	"start_url": "/",
 	"icons": [

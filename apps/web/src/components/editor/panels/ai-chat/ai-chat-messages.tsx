@@ -7,7 +7,7 @@ import { useAIChat } from "@/hooks/use-ai-chat";
 import { AIChatToolStatus } from "./ai-chat-tool-status";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/utils/ui";
-import { Loader2, SparklesIcon, User, Image, Video, Music, FileIcon } from "lucide-react";
+import { Loader2, SparklesIcon, Image, Video, Music, FileIcon } from "lucide-react";
 
 function FileAttachmentPreview({ files }: { files: AttachedFile[] }) {
 	if (!files || files.length === 0) return null;
@@ -94,31 +94,36 @@ export function AIChatMessages() {
 	}
 
 	return (
-		<div ref={scrollRef} className="flex-1 overflow-auto scrollbar-thin p-3">
-			<div className="flex flex-col gap-4">
+		<div ref={scrollRef} className="h-full overflow-auto scrollbar-thin px-3 py-4">
+			<div className="flex flex-col gap-5">
 				{messages.map((message) => (
-					<div key={message.id} className="flex gap-2">
+					<div
+						key={message.id}
+						className={cn(
+							"flex",
+							message.role === "user" ? "justify-end" : "justify-start",
+						)}
+					>
 						<div
 							className={cn(
-								"flex size-6 shrink-0 items-center justify-center rounded-full",
+								"min-w-0 max-w-[85%] rounded-xl px-3 py-2",
 								message.role === "user"
-									? "bg-blue-500/10 text-blue-500"
-									: "bg-purple-500/10 text-purple-500",
+									? "bg-primary text-primary-foreground"
+									: "bg-muted",
 							)}
 						>
-							{message.role === "user" ? (
-								<User className="size-3.5" />
-							) : (
-								<SparklesIcon className="size-3.5" />
-							)}
-						</div>
-						<div className="flex-1 min-w-0">
-							{/* Render file attachments for user messages */}
 							{message.attachments && message.attachments.length > 0 && (
 								<FileAttachmentPreview files={message.attachments} />
 							)}
 							{message.content && (
-								<div className="prose prose-sm dark:prose-invert max-w-none text-sm [&_p]:leading-relaxed [&_p]:my-1 [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:rounded-md [&_code]:text-xs">
+								<div
+									className={cn(
+										"prose prose-sm max-w-none text-sm [&_p]:leading-relaxed [&_p]:my-1 [&_pre]:p-2 [&_pre]:rounded-md [&_code]:text-xs",
+										message.role === "user"
+											? "[&_p]:text-primary-foreground [&_code]:text-primary-foreground/80 [&_pre]:bg-black/10"
+											: "dark:prose-invert [&_pre]:bg-background",
+									)}
+								>
 									<ReactMarkdown>{message.content}</ReactMarkdown>
 								</div>
 							)}
@@ -129,11 +134,8 @@ export function AIChatMessages() {
 					</div>
 				))}
 				{isStreaming && messages[messages.length - 1]?.role !== "assistant" && (
-					<div className="flex gap-2">
-						<div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-purple-500/10 text-purple-500">
-							<SparklesIcon className="size-3.5" />
-						</div>
-						<div className="flex items-center gap-1 py-1">
+					<div className="flex justify-start">
+						<div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2.5">
 							<Loader2 className="size-3.5 animate-spin text-muted-foreground" />
 							<span className="text-xs text-muted-foreground">Thinking...</span>
 						</div>
@@ -145,14 +147,10 @@ export function AIChatMessages() {
 }
 
 const SUGGESTED_PROMPTS = [
-	"Generate an image of a cinematic sunset for my intro",
-	"Create a voiceover narration for this clip",
 	"Add captions to the entire video",
 	"Generate background music that matches the mood",
+	"Create a voiceover narration for this clip",
 	"Change to 9:16 vertical format for TikTok",
-	"Create a movie trailer from my clips",
-	"Remove background from the selected clip",
-	"Add animated title card at the beginning",
 ];
 
 function EmptyState() {
@@ -169,23 +167,22 @@ function EmptyState() {
 	};
 
 	return (
-		<div className="flex flex-1 flex-col items-center justify-center gap-4 p-4">
-			<div className="flex size-12 items-center justify-center rounded-full bg-purple-500/10">
-				<SparklesIcon className="size-6 text-purple-500" />
+		<div className="flex h-full flex-col items-center justify-center gap-5 px-4 py-6">
+			<div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500/20 to-blue-500/20">
+				<SparklesIcon className="size-7 text-purple-500" />
 			</div>
 			<div className="text-center">
-				<h3 className="text-sm font-medium">AI Video Editor</h3>
-				<p className="mt-1 text-xs text-muted-foreground">
-					Describe edits, generate media, or upload files to get started.
-					I&apos;ll ask clarifying questions when needed.
+				<h3 className="text-sm font-semibold">AI Video Editor</h3>
+				<p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+					Describe edits, generate media, or ask questions about your project.
 				</p>
 			</div>
-			<div className="flex w-full flex-col gap-1.5">
+			<div className="flex w-full flex-col gap-2">
 				{SUGGESTED_PROMPTS.map((prompt) => (
 					<button
 						key={prompt}
 						type="button"
-						className="w-full rounded-md border px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+						className="w-full rounded-lg border bg-muted/50 px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
 						onClick={() => handlePromptClick(prompt)}
 					>
 						{prompt}

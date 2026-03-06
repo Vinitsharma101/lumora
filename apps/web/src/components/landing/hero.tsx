@@ -1,12 +1,11 @@
 "use client";
 
 import { Button } from "../ui/button";
-import { ArrowRight, Star } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import { Handlebars } from "./handlebars";
 import Link from "next/link";
 import { motion } from "motion/react";
-import { SOCIAL_LINKS } from "@/constants/site-constants";
 
 export function Hero() {
 	return (
@@ -18,13 +17,13 @@ export function Hero() {
 				className="mx-auto flex w-full max-w-4xl flex-col items-center"
 			>
 				<div className="inline-block text-5xl font-bold tracking-tighter md:text-7xl">
-					<h1>The open source</h1>
-					<Handlebars>Video editor</Handlebars>
+					<h1>An agentic</h1>
+					<Handlebars>Video editing platform</Handlebars>
 				</div>
 
 				<p className="text-muted-foreground mx-auto mt-8 max-w-2xl text-lg font-light tracking-wide md:text-xl">
 					Go from raw footage to a clean, publish-ready edit in minutes.
-					Free, open source, and runs in your browser.
+					AI-powered, and runs in your browser.
 				</p>
 
 				<div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
@@ -36,20 +35,6 @@ export function Hero() {
 						>
 							Get started
 							<ArrowRight className="ml-1 size-4" />
-						</Button>
-					</Link>
-					<Link
-						href={SOCIAL_LINKS.github}
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						<Button
-							variant="outline"
-							size="lg"
-							className="h-12 px-8 text-base"
-						>
-							<Star className="mr-1 size-4" />
-							Star on GitHub
 						</Button>
 					</Link>
 				</div>
@@ -67,7 +52,7 @@ export function Hero() {
 						src="/landing-page-dark.png"
 						width={1903}
 						height={1269}
-						alt="OpenCut video editor interface"
+						alt="GraceCut video editor interface"
 						className="w-full"
 						priority
 					/>

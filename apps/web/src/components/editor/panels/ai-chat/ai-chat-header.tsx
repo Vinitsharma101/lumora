@@ -22,9 +22,9 @@ export function AIChatHeader() {
 		useAIChatStore();
 
 	return (
-		<div className="flex items-center justify-between border-b px-3 py-2">
+		<div className="flex items-center justify-between px-3 py-2.5">
 			<div className="flex items-center gap-2">
-				<span className="text-sm font-medium">AI Editor</span>
+				<span className="text-sm font-medium">AI Chat</span>
 				<Select
 					value={selectedProvider}
 					onValueChange={(v) => setProvider(v as AIProvider)}
@@ -41,7 +41,7 @@ export function AIChatHeader() {
 					</SelectContent>
 				</Select>
 			</div>
-			<div className="flex items-center gap-1">
+			<div className="flex items-center gap-0.5">
 				<Button
 					variant="ghost"
 					size="icon"

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { BasePage } from "@/app/base-page";
-import { GitHubContributeSection } from "@/components/gitHub-contribute-section";
+
 import { Badge } from "@/components/ui/badge";
 import { ReactMarkdownWrapper } from "@/components/ui/react-markdown-wrapper";
 import { cn } from "@/utils/ui";
@@ -24,7 +24,7 @@ const roadmapItems: RoadmapItem[] = [
 	{
 		title: "Start",
 		description:
-			"This is where it all started. Repository created, initial project structure, and the vision for a free, open-source video editor. [Check out the first tweet](https://x.com/mazeincoding/status/1936706642512388188) to see where it started.",
+			"This is where it all started. Repository created, initial project structure, and the vision for an AI-powered video editing platform.",
 		status: {
 			text: "Completed",
 			type: "complete",
@@ -51,7 +51,7 @@ const roadmapItems: RoadmapItem[] = [
 	{
 		title: "Native app (mobile/desktop)",
 		description:
-			"Native OpenCut apps for Mac, Windows, Linux, and iOS/Android.",
+			"Native GraceCut apps for Mac, Windows, Linux, iOS, and Android.",
 		status: {
 			text: "Not started",
 			type: "default",
@@ -60,28 +60,28 @@ const roadmapItems: RoadmapItem[] = [
 ];
 
 export const metadata: Metadata = {
-	title: "Roadmap - OpenCut",
+	title: "Roadmap - GraceCut",
 	description:
-		"See what's coming next for OpenCut - the free, open-source video editor that respects your privacy.",
+		"See what's coming next for GraceCut - the AI-powered video editing platform.",
 	openGraph: {
-		title: "OpenCut Roadmap - What's Coming Next",
+		title: "GraceCut Roadmap - What's Coming Next",
 		description:
-			"See what's coming next for OpenCut - the free, open-source video editor that respects your privacy.",
+			"See what's coming next for GraceCut - the AI-powered video editing platform.",
 		type: "website",
 		images: [
 			{
 				url: "/open-graph/roadmap.jpg",
 				width: 1200,
 				height: 630,
-				alt: "OpenCut Roadmap",
+				alt: "GraceCut Roadmap",
 			},
 		],
 	},
 	twitter: {
 		card: "summary_large_image",
-		title: "OpenCut Roadmap - What's Coming Next",
+		title: "GraceCut Roadmap - What's Coming Next",
 		description:
-			"See what's coming next for OpenCut - the free, open-source video editor that respects your privacy.",
+			"See what's coming next for GraceCut - the AI-powered video editing platform.",
 		images: ["/open-graph/roadmap.jpg"],
 	},
 };
@@ -90,7 +90,7 @@ export default function RoadmapPage() {
 	return (
 		<BasePage
 			title="Roadmap"
-			description={`What's coming next for OpenCut (last updated: ${LAST_UPDATED})`}
+			description={`What's coming next for GraceCut (last updated: ${LAST_UPDATED})`}
 		>
 			<div className="mx-auto flex max-w-4xl flex-col gap-16">
 				<div className="flex flex-col gap-6">
@@ -98,12 +98,6 @@ export default function RoadmapPage() {
 						<RoadmapItem key={item.title} item={item} index={index} />
 					))}
 				</div>
-				<GitHubContributeSection
-					title="Want to help?"
-					description="OpenCut is open source and built by the community. Every contribution,
-          no matter how small, helps us build the best free video editor
-          possible."
-				/>
 			</div>
 		</BasePage>
 	);

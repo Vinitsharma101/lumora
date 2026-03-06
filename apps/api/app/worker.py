@@ -558,11 +558,23 @@ async def process_movie_analysis(ctx: dict, session_id: str, chunk_index: int) -
     return {"status": "analysis_complete", "chunk_index": chunk_index}
 
 async def process_movie_director(ctx: dict, session_id: str) -> dict:
-    """Runs the DirectorAgent to create the ShowBible and 3-act structure, then enqueues act jobs."""
+    """Runs QAAgent for pre-validation, then DirectorAgent, then cost estimation."""
     from app.agents.orchestrator import AgentOrchestrator
     from app.agents.director_agent import DirectorAgent
+    from app.agents.qa_agent import QAAgent
+    from app.services.cost_estimator import estimate_pipeline_cost
 
     orchestrator = await AgentOrchestrator.get_session(session_id)
+
+    # Pre-pipeline validation: run QAAgent to check for ambiguous queries
+    if not orchestrator.state.get("qa_completed"):
+        qa = QAAgent()
+        orchestrator.state = await qa.run(orchestrator.state)
+        await orchestrator.save_state()
+
+        if orchestrator.state.get("status") == "waiting_qa" and orchestrator.state.get("pending_questions"):
+            return {"status": "waiting_qa", "questions": len(orchestrator.state["pending_questions"])}
+        orchestrator.state["qa_completed"] = True
 
     director = DirectorAgent()
     orchestrator.state = await director.run(orchestrator.state)
@@ -571,17 +583,27 @@ async def process_movie_director(ctx: dict, session_id: str) -> dict:
     if orchestrator.state.get("status") == "failed":
         return {"error": orchestrator.state.get("error")}
 
+    # Estimate costs and pause for user approval
+    cost_estimate = estimate_pipeline_cost(orchestrator.state)
+    orchestrator.state["cost_estimate"] = cost_estimate
+
+    if not orchestrator.state.get("cost_approved") and cost_estimate.get("total_estimated_usd", 0) > 0:
+        orchestrator.state["status"] = "waiting_approval"
+        orchestrator.state["messages"] = orchestrator.state.get("messages", []) + [
+            {"role": "agent", "content": f"Estimated cost: ${cost_estimate['total_estimated_usd']:.2f}. Approve to continue."}
+        ]
+        await orchestrator.save_state()
+        return {"status": "waiting_approval", "cost_estimate": cost_estimate}
+
     acts = orchestrator.state.get("acts", [])
     scene_plan = orchestrator.state.get("scene_plan", [])
     pool = ctx["redis"]
 
-    # If we have acts, enqueue per-act coordinators (parallel across acts)
     if acts:
         for act_idx in range(len(acts)):
             await pool.enqueue_job("process_movie_act", session_id, act_idx)
         return {"status": "director_complete", "acts_queued": len(acts)}
 
-    # Fallback: flat scene list (legacy behavior)
     for idx in range(len(scene_plan)):
         await pool.enqueue_job("process_movie_scene", session_id, idx)
     return {"status": "director_complete", "scenes_queued": len(scene_plan)}
@@ -634,6 +656,7 @@ async def process_movie_scene(ctx: dict, session_id: str, scene_idx: int) -> dic
     from app.agents.specialized_agents import (
         CutAgent, CaptionAgent, ColorAgent, AudioAgent, EffectsAgent, FaceAgent
     )
+    from app.services.audio_pipeline import AudioPipeline
 
     orchestrator = await AgentOrchestrator.get_session(session_id)
     scene_plan = orchestrator.state.get("scene_plan", [])
@@ -665,7 +688,7 @@ async def process_movie_scene(ctx: dict, session_id: str, scene_idx: int) -> dic
 
     # Step 2: Generation (most time-consuming)
     try:
-        generator = GenerationAgent()
+        generator = GenerationAgent(session_id=session_id)
         scene_state = await generator.run(scene_state)
     except Exception as e:
         logger.exception(f"GenerationAgent failed for scene {scene_idx}")
@@ -675,6 +698,27 @@ async def process_movie_scene(ctx: dict, session_id: str, scene_idx: int) -> dic
     orchestrator.state["messages"] = scene_state.get("messages", [])
     orchestrator.state["generated_assets"] = scene_state.get("generated_assets", [])
     await orchestrator.save_state()
+
+    # Step 2.5: AudioPipeline — generate per-character dialog and mix scene audio
+    try:
+        audio_pipeline = AudioPipeline()
+        character_profiles = scene_state.get("character_profiles", {})
+        scene_audio = await audio_pipeline.generate_scene_audio(scene, character_profiles)
+
+        # Mix all audio layers (dialog + ambient + music)
+        dialog_urls = [d["audio_url"] for d in scene_audio.get("dialog_urls", []) if d.get("audio_url")]
+        mixed_audio_url = await audio_pipeline.mix_scene_audio(
+            dialog_urls=dialog_urls,
+            ambient_url=scene_audio.get("ambient_url"),
+            music_url=scene_state.get("music_url"),
+            scene_duration=scene.get("duration", 5),
+        )
+        if mixed_audio_url:
+            scene_state["mixed_audio_url"] = mixed_audio_url
+        scene_state["scene_audio"] = scene_audio
+        await audio_pipeline.close()
+    except Exception as e:
+        logger.error(f"AudioPipeline failed for scene {scene_idx}: {e}")
 
     # Step 3: Specialized agents — run independent ones in parallel
     # CutAgent must run first (adjusts clip boundaries)
@@ -747,10 +791,35 @@ async def process_movie_consistency(ctx: dict, session_id: str) -> dict:
     orchestrator.state = await engine.run_all(orchestrator.state)
     await orchestrator.save_state()
     
-    pool = ctx["redis"] # Proceed to assembly
-    await pool.enqueue_job("process_movie_assembly", session_id)
-    
+    pool = ctx["redis"]
+    await pool.enqueue_job("process_movie_review", session_id)
+
     return {"status": "consistency_complete"}
+
+
+async def process_movie_review(ctx: dict, session_id: str) -> dict:
+    """Runs ReviewAgent on the assembled timeline, pauses for user if score is low."""
+    from app.agents.orchestrator import AgentOrchestrator
+    from app.agents.review_agent import ReviewAgent
+
+    orchestrator = await AgentOrchestrator.get_session(session_id)
+
+    review = ReviewAgent()
+    orchestrator.state = await review.run(orchestrator.state)
+    await orchestrator.save_state()
+
+    review_score = orchestrator.state.get("review_score", 100)
+    if review_score < 80 and orchestrator.state.get("status") == "regenerating":
+        orchestrator.state["status"] = "waiting_approval"
+        orchestrator.state["messages"] = orchestrator.state.get("messages", []) + [
+            {"role": "agent", "content": f"Review score: {review_score}/100. Please review issues and approve to continue."}
+        ]
+        await orchestrator.save_state()
+        return {"status": "waiting_approval", "review_score": review_score}
+
+    pool = ctx["redis"]
+    await pool.enqueue_job("process_movie_assembly", session_id)
+    return {"status": "review_complete", "score": review_score}
 
 
 async def process_movie_assembly(ctx: dict, session_id: str) -> dict:
@@ -759,7 +828,7 @@ async def process_movie_assembly(ctx: dict, session_id: str) -> dict:
     from app.database import async_session_factory
     from app.models import Project
     from sqlalchemy import select
-    
+
     orchestrator = await AgentOrchestrator.get_session(session_id)
     assembled = orchestrator.state.get("assembled_timeline", {})
     scene_plan = orchestrator.state.get("scene_plan", [])
@@ -843,6 +912,7 @@ class WorkerSettings:
         process_movie_act,
         process_movie_scene,
         process_movie_consistency,
+        process_movie_review,
         process_movie_assembly,
     ]
     redis_settings = _parse_redis_url(settings.REDIS_URL)

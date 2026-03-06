@@ -82,40 +82,71 @@ class CutAgent(BaseSpecializedAgent):
 
 
 class CaptionAgent(BaseSpecializedAgent):
-    """Generates subtitle track from dialog script with positioning and timing."""
+    """Generates subtitle track and SRT file from dialog script."""
 
     async def run(self, state: dict) -> dict:
-        logger.info("CaptionAgent: Generating captions from dialog script.")
+        logger.info("CaptionAgent: Generating captions and SRT from dialog script.")
 
         scene_plan = state.get("scene_plan", {})
         scenes = scene_plan.get("scenes", [])
 
         caption_entries = []
+        srt_entries = []
         cursor = 0.0
+        srt_index = 1
 
         for scene in scenes:
             scene_id = scene.get("scene_id", "")
             dur = scene.get("duration", 5)
 
+            # Collect text from voiceover and dialog
+            texts = []
             voiceover = scene.get("voiceover")
             if voiceover and voiceover.get("text"):
-                text = voiceover["text"]
+                texts.append(voiceover["text"])
+            for dialog in scene.get("dialog", []):
+                line = dialog.get("line", "")
+                speaker = dialog.get("speaker", "")
+                if line:
+                    texts.append(f"{speaker}: {line}" if speaker else line)
+
+            for text in texts:
                 words = text.split()
                 chunk_size = 8
                 word_chunks = [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
 
                 chunk_dur = dur / max(len(word_chunks), 1)
                 for i, chunk in enumerate(word_chunks):
+                    start_time = cursor + (i * chunk_dur)
+                    end_time = start_time + chunk_dur
+                    chunk_text = " ".join(chunk)
+
                     caption_entries.append({
-                        "id": f"cap_{scene_id}_{i}",
-                        "text": " ".join(chunk),
-                        "startTime": cursor + (i * chunk_dur),
+                        "id": f"cap_{scene_id}_{srt_index}",
+                        "text": chunk_text,
+                        "startTime": start_time,
                         "duration": chunk_dur,
                         "position": "bottom_center",
                         "style": "default",
                     })
 
+                    srt_entries.append(
+                        f"{srt_index}\n"
+                        f"{_format_srt_time(start_time)} --> {_format_srt_time(end_time)}\n"
+                        f"{chunk_text}\n"
+                    )
+                    srt_index += 1
+
             cursor += dur
+
+        # Generate and upload SRT file
+        srt_url = None
+        if srt_entries:
+            srt_content = "\n".join(srt_entries)
+            srt_url = await upload_bytes(
+                srt_content.encode("utf-8"), "srt", "text/plain",
+                prefix="subtitles"
+            )
 
         timeline = state.get("assembled_timeline", {})
         if isinstance(timeline, dict):
@@ -124,11 +155,16 @@ class CaptionAgent(BaseSpecializedAgent):
                 tracks["captions"] = []
             tracks["captions"].extend(caption_entries)
 
-        return {**state, "caption_entries": caption_entries, "caption_agent_complete": True}
+        return {
+            **state,
+            "caption_entries": caption_entries,
+            "subtitle_url": srt_url,
+            "caption_agent_complete": True,
+        }
 
 
 class ColorAgent(BaseSpecializedAgent):
-    """Applies consistent color grading across shots in a scene."""
+    """Applies consistent color grading across shots in a scene via FFmpeg eq/curves filters."""
 
     async def run(self, state: dict) -> dict:
         logger.info("ColorAgent: Applying color grading based on Show Bible palette.")
@@ -139,6 +175,46 @@ class ColorAgent(BaseSpecializedAgent):
 
         grading_params = _derive_color_params(visual_style, color_palette)
         state["color_grading"] = grading_params
+
+        # Apply FFmpeg eq filter to each generated video/image asset
+        generated_assets = state.get("generated_assets", [])
+        brightness = grading_params.get("brightness", 0)
+        contrast = grading_params.get("contrast", 1.0)
+        saturation = grading_params.get("saturation", 1.0)
+        gamma = grading_params.get("gamma", 1.0)
+
+        eq_filter = f"eq=brightness={brightness}:contrast={contrast}:saturation={saturation}:gamma={gamma}"
+
+        for asset in generated_assets:
+            video_url = asset.get("video_url")
+            if not video_url or not video_url.startswith("http"):
+                continue
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                input_path = os.path.join(tmpdir, "input.mp4")
+                output_path = os.path.join(tmpdir, "graded.mp4")
+
+                downloaded = await self._download_to_file(video_url, input_path)
+                if not downloaded:
+                    continue
+
+                success, _ = await self._run_ffmpeg([
+                    "ffmpeg", "-y",
+                    "-i", input_path,
+                    "-vf", eq_filter,
+                    "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                    "-c:a", "copy",
+                    output_path,
+                ])
+
+                if success and os.path.exists(output_path):
+                    with open(output_path, "rb") as f:
+                        graded_url = await upload_bytes(
+                            f.read(), "mp4", "video/mp4",
+                            prefix=f"graded/{asset.get('scene_id', 'unknown')}"
+                        )
+                    asset["video_url"] = graded_url
+                    asset["color_graded"] = True
 
         return {**state, "color_agent_complete": True}
 
@@ -190,13 +266,15 @@ class AudioAgent(BaseSpecializedAgent):
 
 
 class EffectsAgent(BaseSpecializedAgent):
-    """Adds shot-to-shot transitions, Ken Burns on stills, camera motion simulation."""
+    """Adds shot-to-shot transitions (xfade), Ken Burns (zoompan) on stills, camera motion."""
 
     async def run(self, state: dict) -> dict:
         logger.info("EffectsAgent: Adding transitions and visual effects.")
 
         scene_plan = state.get("scene_plan", {})
         scenes = scene_plan.get("scenes", [])
+        generated_assets = state.get("generated_assets", [])
+        assets_by_id = {a.get("scene_id"): a for a in generated_assets}
 
         effects_metadata = []
 
@@ -204,14 +282,18 @@ class EffectsAgent(BaseSpecializedAgent):
             transition_in = scene.get("transition_in", "cut")
             transition_out = scene.get("transition_out", "cut")
             visual_type = scene.get("visual_type", "text_to_video")
+            scene_id = scene.get("scene_id", f"s{i}")
 
             effect = {
-                "scene_id": scene.get("scene_id", f"s{i}"),
+                "scene_id": scene_id,
                 "transition_in": transition_in,
                 "transition_out": transition_out,
                 "transition_duration": _get_transition_duration(transition_in),
             }
 
+            asset = assets_by_id.get(scene_id, {})
+
+            # Apply Ken Burns (zoompan) to static images
             if visual_type in ("text_to_image", "static_image"):
                 camera = scene.get("camera", {})
                 movement = camera.get("movement", "slow_zoom_in")
@@ -222,6 +304,35 @@ class EffectsAgent(BaseSpecializedAgent):
                     "scale_end": 1.15,
                 }
 
+                image_url = asset.get("image_url")
+                if image_url and image_url.startswith("http"):
+                    duration = scene.get("duration", 5)
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        input_path = os.path.join(tmpdir, "still.png")
+                        output_path = os.path.join(tmpdir, "zoompan.mp4")
+
+                        downloaded = await self._download_to_file(image_url, input_path)
+                        if downloaded:
+                            fps = 24
+                            total_frames = int(duration * fps)
+                            success, _ = await self._run_ffmpeg([
+                                "ffmpeg", "-y",
+                                "-loop", "1", "-i", input_path,
+                                "-vf", f"zoompan=z='min(zoom+0.001,1.15)':d={total_frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps={fps}",
+                                "-t", str(duration),
+                                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                                output_path,
+                            ])
+
+                            if success and os.path.exists(output_path):
+                                with open(output_path, "rb") as f:
+                                    video_url = await upload_bytes(
+                                        f.read(), "mp4", "video/mp4",
+                                        prefix=f"effects/{scene_id}"
+                                    )
+                                asset["video_url"] = video_url
+                                asset["ken_burns_applied"] = True
+
             effects_metadata.append(effect)
 
         state["effects_metadata"] = effects_metadata
@@ -229,13 +340,15 @@ class EffectsAgent(BaseSpecializedAgent):
 
 
 class FaceAgent(BaseSpecializedAgent):
-    """Tracks faces for smart cropping on close-ups and background character blurring."""
+    """Tracks faces for smart cropping on close-ups using FFmpeg crop filter."""
 
     async def run(self, state: dict) -> dict:
         logger.info("FaceAgent: Processing face detection for smart cropping.")
 
         scene_plan = state.get("scene_plan", {})
         scenes = scene_plan.get("scenes", [])
+        generated_assets = state.get("generated_assets", [])
+        assets_by_id = {a.get("scene_id"): a for a in generated_assets}
 
         face_metadata = []
 
@@ -251,6 +364,36 @@ class FaceAgent(BaseSpecializedAgent):
                     "target_character": char_ids[0],
                     "crop_padding": 0.15,
                 })
+
+                # Apply center crop for close-up framing
+                asset = assets_by_id.get(scene_id, {})
+                video_url = asset.get("video_url")
+                if video_url and video_url.startswith("http"):
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        input_path = os.path.join(tmpdir, "input.mp4")
+                        output_path = os.path.join(tmpdir, "cropped.mp4")
+
+                        downloaded = await self._download_to_file(video_url, input_path)
+                        if downloaded:
+                            # Center crop to 70% of frame for close-up effect
+                            success, _ = await self._run_ffmpeg([
+                                "ffmpeg", "-y",
+                                "-i", input_path,
+                                "-vf", "crop=iw*0.7:ih*0.7:iw*0.15:ih*0.1,scale=1920:1080",
+                                "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+                                "-c:a", "copy",
+                                output_path,
+                            ])
+
+                            if success and os.path.exists(output_path):
+                                with open(output_path, "rb") as f:
+                                    cropped_url = await upload_bytes(
+                                        f.read(), "mp4", "video/mp4",
+                                        prefix=f"face_crop/{scene_id}"
+                                    )
+                                asset["video_url"] = cropped_url
+                                asset["face_cropped"] = True
+
             elif len(char_ids) > 2:
                 face_metadata.append({
                     "scene_id": scene_id,
@@ -260,6 +403,15 @@ class FaceAgent(BaseSpecializedAgent):
 
         state["face_metadata"] = face_metadata
         return {**state, "face_agent_complete": True}
+
+
+def _format_srt_time(seconds: float) -> str:
+    """Convert seconds to SRT timestamp format HH:MM:SS,mmm."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int((seconds % 1) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
 def _derive_color_params(visual_style: str, palette: list) -> dict:
