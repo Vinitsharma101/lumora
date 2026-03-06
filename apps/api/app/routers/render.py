@@ -78,7 +78,7 @@ async def get_render_status(
     if job.status == "completed" and job.output_url:
         try:
             storage_path = f"{user.id}/{job_id}/output.{job.format}"
-            job.output_url = get_storage_url(BUCKET_RENDERED_OUTPUTS, storage_path, expires_in=86400 * 7)
+            job.output_url = await get_storage_url(BUCKET_RENDERED_OUTPUTS, storage_path, expires_in=86400 * 7)
         except Exception:
             pass
 
@@ -151,6 +151,6 @@ async def get_render_download(
         raise HTTPException(status_code=400, detail="Render not yet completed")
 
     storage_path = f"{user.id}/{job_id}/output.{job.format}"
-    url = get_storage_url(BUCKET_RENDERED_OUTPUTS, storage_path, expires_in=86400 * 7)
+    url = await get_storage_url(BUCKET_RENDERED_OUTPUTS, storage_path, expires_in=86400 * 7)
 
     return {"url": url, "size": job.output_size, "format": job.format}

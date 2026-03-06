@@ -286,12 +286,11 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 segments = transcribe_result.get("segments", [])
                 silences = detect_silence_from_transcript(
                     segments,
-                    min_gap=input_data.get("min_silence_duration", 0.5),
+                    min_silence_duration=input_data.get("min_silence_duration", 0.5),
                 )
                 trimmed = generate_trimmed_timeline(
-                    segments,
-                    silences,
-                    video_duration=input_data.get("video_duration", 0),
+                    original_duration=input_data.get("video_duration", 0),
+                    silences=silences,
                 )
                 await update_job_status(db, job_id, "completed", 1.0, output_data={
                     "silences": silences,
@@ -559,84 +558,181 @@ async def process_movie_analysis(ctx: dict, session_id: str, chunk_index: int) -
     return {"status": "analysis_complete", "chunk_index": chunk_index}
 
 async def process_movie_director(ctx: dict, session_id: str) -> dict:
-    """Runs the DirectorAgent to create the ShowBible and split scenes, then enqueues scene jobs."""
+    """Runs the DirectorAgent to create the ShowBible and 3-act structure, then enqueues act jobs."""
     from app.agents.orchestrator import AgentOrchestrator
     from app.agents.director_agent import DirectorAgent
-    
+
     orchestrator = await AgentOrchestrator.get_session(session_id)
-    
+
     director = DirectorAgent()
     orchestrator.state = await director.run(orchestrator.state)
     await orchestrator.save_state()
-    
+
     if orchestrator.state.get("status") == "failed":
         return {"error": orchestrator.state.get("error")}
-        
+
+    acts = orchestrator.state.get("acts", [])
     scene_plan = orchestrator.state.get("scene_plan", [])
-    pool = ctx["redis"] # ARQ Redis pool instance is available in context
-    
-    for idx, scene in enumerate(scene_plan):
+    pool = ctx["redis"]
+
+    # If we have acts, enqueue per-act coordinators (parallel across acts)
+    if acts:
+        for act_idx in range(len(acts)):
+            await pool.enqueue_job("process_movie_act", session_id, act_idx)
+        return {"status": "director_complete", "acts_queued": len(acts)}
+
+    # Fallback: flat scene list (legacy behavior)
+    for idx in range(len(scene_plan)):
         await pool.enqueue_job("process_movie_scene", session_id, idx)
-        
     return {"status": "director_complete", "scenes_queued": len(scene_plan)}
 
 
+async def process_movie_act(ctx: dict, session_id: str, act_idx: int) -> dict:
+    """Coordinates all scenes within an act. Scenes within an act run in parallel."""
+    from app.agents.orchestrator import AgentOrchestrator
+
+    orchestrator = await AgentOrchestrator.get_session(session_id)
+    acts = orchestrator.state.get("acts", [])
+
+    if act_idx >= len(acts):
+        return {"error": f"Invalid act index {act_idx}"}
+
+    act = acts[act_idx]
+    act_scenes = act.get("scenes", [])
+    scene_plan = orchestrator.state.get("scene_plan", [])
+    pool = ctx["redis"]
+
+    # Find the global scene indices for scenes in this act
+    scenes_queued = 0
+    for global_idx, scene in enumerate(scene_plan):
+        if scene.get("act_number") == act.get("act_number"):
+            await pool.enqueue_job("process_movie_scene", session_id, global_idx)
+            scenes_queued += 1
+
+    logger.info(f"Act {act_idx + 1} '{act.get('title', '')}': queued {scenes_queued} scenes")
+
+    # Update acts progress
+    acts_progress = orchestrator.state.get("acts_progress", {})
+    acts_progress[f"act_{act_idx}"] = {"status": "processing", "scenes_total": scenes_queued}
+    orchestrator.state["acts_progress"] = acts_progress
+    await orchestrator.save_state()
+
+    return {"status": "act_processing", "act_idx": act_idx, "scenes_queued": scenes_queued}
+
+
 async def process_movie_scene(ctx: dict, session_id: str, scene_idx: int) -> dict:
-    """Runs the pipeline (planner, generator, editor) for a SINGLE chunk/scene."""
+    """Runs the pipeline (planner, generator, specialized agents, editor) for a SINGLE scene.
+
+    Saves checkpoint state after each major step. Independent specialized agents
+    run in parallel. One agent failure doesn't kill the scene.
+    """
+    import asyncio
     from app.agents.orchestrator import AgentOrchestrator
     from app.agents.planning_agent import PlanningAgent
     from app.agents.generation_agent import GenerationAgent
     from app.agents.editing_agent import EditingAgent
-    
+    from app.agents.specialized_agents import (
+        CutAgent, CaptionAgent, ColorAgent, AudioAgent, EffectsAgent, FaceAgent
+    )
+
     orchestrator = await AgentOrchestrator.get_session(session_id)
     scene_plan = orchestrator.state.get("scene_plan", [])
-    
+
     if scene_idx >= len(scene_plan):
         return {"error": "Invalid scene index"}
-        
+
     scene = scene_plan[scene_idx]
-    
-    # Isolate sub-state for just this scene
+
     scene_state = {
         **orchestrator.state,
         "current_scene": scene,
         "original_query": f"Scene {scene_idx + 1}: {scene.get('description')}"
     }
-    
-    planner = PlanningAgent()
-    scene_state = await planner.run(scene_state)
-    if scene_state.get("status") == "failed":
-        return {"error": f"Failed planning scene {scene_idx}"}
-        
-    generator = GenerationAgent()
-    scene_state = await generator.run(scene_state)
-    
-    from app.agents.specialized_agents import (
-        CutAgent, CaptionAgent, ColorAgent, AudioAgent, EffectsAgent, FaceAgent
-    )
-    
-    # Run specialized edit agents pool
-    scene_state = await CutAgent().run(scene_state)
-    scene_state = await CaptionAgent().run(scene_state)
-    scene_state = await ColorAgent().run(scene_state)
-    scene_state = await AudioAgent().run(scene_state)
-    scene_state = await EffectsAgent().run(scene_state)
-    scene_state = await FaceAgent().run(scene_state)
-    
+
+    # Step 1: Planning
+    try:
+        planner = PlanningAgent()
+        scene_state = await planner.run(scene_state)
+        if scene_state.get("status") == "failed":
+            return {"error": f"Failed planning scene {scene_idx}"}
+    except Exception as e:
+        logger.exception(f"PlanningAgent failed for scene {scene_idx}")
+        return {"error": f"Planning failed: {e}"}
+
+    # Checkpoint after planning
+    orchestrator.state["messages"] = scene_state.get("messages", [])
+    await orchestrator.save_state()
+
+    # Step 2: Generation (most time-consuming)
+    try:
+        generator = GenerationAgent()
+        scene_state = await generator.run(scene_state)
+    except Exception as e:
+        logger.exception(f"GenerationAgent failed for scene {scene_idx}")
+        scene_state["generation_errors"] = [str(e)]
+
+    # Checkpoint after generation
+    orchestrator.state["messages"] = scene_state.get("messages", [])
+    orchestrator.state["generated_assets"] = scene_state.get("generated_assets", [])
+    await orchestrator.save_state()
+
+    # Step 3: Specialized agents — run independent ones in parallel
+    # CutAgent must run first (adjusts clip boundaries)
+    try:
+        scene_state = await CutAgent().run(scene_state)
+    except Exception as e:
+        logger.error(f"CutAgent failed for scene {scene_idx}: {e}")
+
+    # These four are independent of each other
+    async def _safe_run(agent_cls, state):
+        try:
+            return await agent_cls().run(state)
+        except Exception as e:
+            logger.error(f"{agent_cls.__name__} failed for scene {scene_idx}: {e}")
+            return state
+
+    color_task = _safe_run(ColorAgent, scene_state)
+    audio_task = _safe_run(AudioAgent, scene_state)
+    effects_task = _safe_run(EffectsAgent, scene_state)
+    face_task = _safe_run(FaceAgent, scene_state)
+
+    parallel_results = await asyncio.gather(color_task, audio_task, effects_task, face_task)
+
+    # Merge results from parallel agents
+    for result in parallel_results:
+        for key, value in result.items():
+            if key.endswith("_complete") and value:
+                scene_state[key] = value
+
+    # CaptionAgent runs after CutAgent (depends on final clip boundaries)
+    try:
+        scene_state = await CaptionAgent().run(scene_state)
+    except Exception as e:
+        logger.error(f"CaptionAgent failed for scene {scene_idx}: {e}")
+
+    # Step 4: Assembly
+    try:
+        editor = EditingAgent()
+        scene_state = await editor.run(scene_state)
+    except Exception as e:
+        logger.exception(f"EditingAgent failed for scene {scene_idx}")
+        scene_state["assembled_timeline"] = {}
+
     # Save the timeline for this scene
     assembled = orchestrator.state.get("assembled_timeline", {})
     if not isinstance(assembled, dict):
         assembled = {}
-        
+
     assembled[f"scene_{scene_idx}"] = scene_state.get("assembled_timeline", {})
     orchestrator.state["assembled_timeline"] = assembled
+    orchestrator.state["messages"] = scene_state.get("messages", [])
     await orchestrator.save_state()
-    
+
     # If this is the last tracked scene to finish, run Consistency Engine
     if len(assembled) == len(scene_plan):
         pool = ctx["redis"]
         await pool.enqueue_job("process_movie_consistency", session_id)
-        
+
     return {"status": "completed", "scene_idx": scene_idx}
 
 
@@ -731,19 +827,25 @@ async def process_movie_assembly(ctx: dict, session_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 class WorkerSettings:
-    """ARQ worker configuration."""
+    """ARQ worker configuration.
+
+    Movie pipeline jobs can run for hours (generation + polling),
+    so job_timeout is set high. max_tries=1 for movie jobs since
+    they checkpoint state and can be resumed.
+    """
 
     functions = [
-        process_render_job, 
-        process_ai_job, 
+        process_render_job,
+        process_ai_job,
         process_movie_ingestion,
         process_movie_analysis,
-        process_movie_director, 
-        process_movie_scene, 
+        process_movie_director,
+        process_movie_act,
+        process_movie_scene,
         process_movie_consistency,
-        process_movie_assembly
+        process_movie_assembly,
     ]
     redis_settings = _parse_redis_url(settings.REDIS_URL)
     max_jobs = 10
-    job_timeout = 1800  # 30 minutes
+    job_timeout = 7200  # 2 hours — movie scenes need time for generation polling
     max_tries = 3

@@ -55,11 +55,11 @@ async def upload_media(
     safe_name = file.filename or f"upload.{file_type}"
     storage_path = f"{user.id}/{project_id}/{asset_id}_{safe_name}"
 
-    # Upload to Supabase Storage
-    upload_file(BUCKET_MEDIA_UPLOADS, storage_path, file_data, file.content_type or "application/octet-stream")
+    # Upload to Supabase Storage (async)
+    await upload_file(BUCKET_MEDIA_UPLOADS, storage_path, file_data, file.content_type or "application/octet-stream")
 
-    # Generate signed URL for access
-    signed_url = get_storage_url(BUCKET_MEDIA_UPLOADS, storage_path, expires_in=86400)
+    # Generate signed URL for access (async)
+    signed_url = await get_storage_url(BUCKET_MEDIA_UPLOADS, storage_path, expires_in=86400)
 
     # Create DB record
     asset = MediaAsset(
@@ -102,16 +102,14 @@ async def list_project_media(
     result = await db.execute(stmt)
     assets = result.scalars().all()
 
-    # Refresh signed URLs
-    refreshed = []
+    # Refresh signed URLs (async)
     for asset in assets:
         try:
-            asset.public_url = get_storage_url(BUCKET_MEDIA_UPLOADS, asset.storage_path, expires_in=86400)
+            asset.public_url = await get_storage_url(BUCKET_MEDIA_UPLOADS, asset.storage_path, expires_in=86400)
         except Exception:
             pass
-        refreshed.append(asset)
 
-    return refreshed
+    return assets
 
 
 @router.get("/api/media/{project_id}/{asset_id}/url")
@@ -136,7 +134,7 @@ async def get_media_url(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    url = get_storage_url(BUCKET_MEDIA_UPLOADS, asset.storage_path, expires_in=86400)
+    url = await get_storage_url(BUCKET_MEDIA_UPLOADS, asset.storage_path, expires_in=86400)
     return {"url": url, "asset_id": asset.id}
 
 
@@ -161,9 +159,9 @@ async def delete_media(
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
-    # Delete from Supabase Storage
+    # Delete from Supabase Storage (async)
     try:
-        delete_file(BUCKET_MEDIA_UPLOADS, asset.storage_path)
+        await delete_file(BUCKET_MEDIA_UPLOADS, asset.storage_path)
     except Exception:
         pass  # Best-effort
 
@@ -186,8 +184,8 @@ async def upload_thumbnail(
     file_data = await file.read()
     storage_path = f"{user.id}/{project_id}/thumbnail.png"
 
-    upload_file(BUCKET_THUMBNAILS, storage_path, file_data, "image/png")
-    public_url = get_public_url(BUCKET_THUMBNAILS, storage_path)
+    await upload_file(BUCKET_THUMBNAILS, storage_path, file_data, "image/png")
+    public_url = await get_public_url(BUCKET_THUMBNAILS, storage_path)
 
     # Update project thumbnail
     stmt = select(Project).where(Project.id == project_id, Project.user_id == user.id)

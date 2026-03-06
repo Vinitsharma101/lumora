@@ -12,13 +12,18 @@ from app.routers import agent as agent_router
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    """Startup/shutdown lifecycle: initialize Supabase buckets, etc."""
+    """Startup/shutdown lifecycle: initialize Supabase buckets, clean up on shutdown."""
     try:
         from app.supabase_client import ensure_buckets_exist
         await ensure_buckets_exist()
     except Exception:
         pass  # Supabase is optional for local dev
     yield
+    # Shutdown: close shared connections
+    from app.http_client import close_http_client
+    from app.rate_limit import close_redis
+    await close_http_client()
+    await close_redis()
 
 
 app = FastAPI(title="OpenCut API", version="0.2.0", lifespan=lifespan)

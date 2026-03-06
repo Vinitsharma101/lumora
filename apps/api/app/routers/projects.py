@@ -155,7 +155,7 @@ async def delete_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found or access denied")
 
-    # Clean up media files from Supabase Storage
+    # Clean up media files from Supabase Storage (async)
     try:
         from app.supabase_client import BUCKET_MEDIA_UPLOADS, delete_file
 
@@ -165,7 +165,7 @@ async def delete_project(
         media_result = await db.execute(media_stmt)
         for asset in media_result.scalars().all():
             try:
-                delete_file(BUCKET_MEDIA_UPLOADS, asset.storage_path)
+                await delete_file(BUCKET_MEDIA_UPLOADS, asset.storage_path)
             except Exception:
                 pass  # Best-effort cleanup
     except Exception:

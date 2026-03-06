@@ -6,9 +6,8 @@ No local models — all processing via API.
 
 import json
 
-import httpx
-
 from app.config import settings
+from app.http_client import get_http_client
 
 
 async def detect_scenes_via_api(video_url: str) -> dict:
@@ -45,36 +44,36 @@ Return ONLY valid JSON:
     "total_scenes": 5
 }"""
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-            headers={
-                "Content-Type": "application/json",
-                "x-goog-api-key": settings.GOOGLE_AI_API_KEY,
+    client = await get_http_client()
+    response = await client.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": settings.GOOGLE_AI_API_KEY,
+        },
+        json={
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "fileData": {
+                                "mimeType": "video/mp4",
+                                "fileUri": video_url,
+                            }
+                        },
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "responseMimeType": "application/json",
             },
-            json={
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": prompt},
-                            {
-                                "fileData": {
-                                    "mimeType": "video/mp4",
-                                    "fileUri": video_url,
-                                }
-                            },
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "responseMimeType": "application/json",
-                },
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        return json.loads(text)
+        },
+    )
+    response.raise_for_status()
+    data = response.json()
+    text = data["candidates"][0]["content"]["parts"][0]["text"]
+    return json.loads(text)
 
 
 async def detect_highlights_via_llm(
@@ -124,42 +123,42 @@ Return ONLY valid JSON:
     ]
 }}"""
 
+    client = await get_http_client()
+
     # Use first available provider
     if settings.OPENAI_API_KEY:
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "gpt-4o",
-                    "response_format": {"type": "json_object"},
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            text = data["choices"][0]["message"]["content"]
-            return json.loads(text).get("highlights", [])
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "gpt-4o",
+                "response_format": {"type": "json_object"},
+                "messages": [{"role": "user", "content": prompt}],
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = data["choices"][0]["message"]["content"]
+        return json.loads(text).get("highlights", [])
 
     if settings.GOOGLE_AI_API_KEY:
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-goog-api-key": settings.GOOGLE_AI_API_KEY,
-                },
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"responseMimeType": "application/json"},
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(text).get("highlights", [])
+        response = await client.post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": settings.GOOGLE_AI_API_KEY,
+            },
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"responseMimeType": "application/json"},
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return json.loads(text).get("highlights", [])
 
     return []

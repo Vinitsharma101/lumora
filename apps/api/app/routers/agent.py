@@ -4,17 +4,18 @@ Agent Router — REST API endpoints for the agentic video creation pipeline.
 Endpoints:
   POST /api/agent/execute/{project_id}  — Start an autonomous agent session
   POST /api/agent/answer/{session_id}   — Submit a clarifying Q&A answer
-  GET  /api/agent/status/{session_id}   — Poll session progress
+  POST /api/agent/approve/{session_id}  — Approve a checkpoint (cost/review)
+  GET  /api/agent/status/{session_id}   — Poll session progress (granular)
   POST /api/agent/character/{project_id} — Register a character for consistency
 """
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from typing import Optional
 
 from app.agents.orchestrator import AgentOrchestrator
 from app.services.character_service import CharacterService
+from app.services.cost_estimator import estimate_pipeline_cost
 from app.auth import get_current_user_optional
 
 logger = logging.getLogger(__name__)
@@ -34,10 +35,16 @@ class AgentAnswerRequest(BaseModel):
     value: str
 
 
+class AgentApproveRequest(BaseModel):
+    checkpoint: str  # "cost_approval", "storyboard", "act_review", "final_review"
+    approved: bool = True
+    feedback: str | None = None
+
+
 class CharacterRegisterRequest(BaseModel):
     name: str
     description: str
-    reference_image_url: Optional[str] = None
+    reference_image_url: str | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -87,13 +94,73 @@ async def submit_answer(session_id: str, request: AgentAnswerRequest):
 
 @router.get("/status/{session_id}")
 async def get_agent_status(session_id: str):
-    """Poll the agent session for current status, questions, and progress."""
+    """Poll the agent session for current status, questions, and granular progress."""
     try:
         orchestrator = await AgentOrchestrator.get_session(session_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    return await orchestrator.get_status()
+    base_status = await orchestrator.get_status()
+
+    # Add granular per-scene/act progress
+    base_status["acts_progress"] = orchestrator.state.get("acts_progress", {})
+    base_status["cost_estimate"] = orchestrator.state.get("cost_estimate")
+    base_status["show_bible"] = orchestrator.state.get("show_bible")
+    base_status["character_profiles"] = orchestrator.state.get("character_profiles", {})
+    base_status["consistency_checked"] = orchestrator.state.get("consistency_checked", False)
+
+    # Count completed scenes
+    assembled = orchestrator.state.get("assembled_timeline", {})
+    if isinstance(assembled, dict):
+        completed_scenes = len([k for k in assembled.keys() if k.startswith("scene_")])
+        base_status["scenes_completed"] = completed_scenes
+
+    scene_plan = orchestrator.state.get("scene_plan", [])
+    base_status["scenes_total"] = len(scene_plan) if isinstance(scene_plan, list) else 0
+
+    return base_status
+
+
+@router.post("/approve/{session_id}")
+async def approve_checkpoint(session_id: str, request: AgentApproveRequest):
+    """Approve a pipeline checkpoint to continue processing."""
+    try:
+        orchestrator = await AgentOrchestrator.get_session(session_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not request.approved:
+        orchestrator.state["status"] = "paused"
+        if request.feedback:
+            orchestrator.state["messages"] = orchestrator.state.get("messages", []) + [
+                {"role": "user", "content": f"Feedback: {request.feedback}"}
+            ]
+        await orchestrator.save_state()
+        return {"status": "paused", "checkpoint": request.checkpoint}
+
+    # Resume pipeline based on checkpoint type
+    from app.worker import get_arq_pool
+
+    if request.checkpoint == "cost_approval":
+        orchestrator.state["cost_approved"] = True
+        orchestrator.state["status"] = "processing"
+        await orchestrator.save_state()
+        pool = await get_arq_pool()
+        await pool.enqueue_job("process_movie_director", session_id)
+
+    elif request.checkpoint in ("storyboard", "act_review"):
+        orchestrator.state["status"] = "processing"
+        if request.feedback:
+            orchestrator.state["messages"] = orchestrator.state.get("messages", []) + [
+                {"role": "user", "content": f"Review feedback: {request.feedback}"}
+            ]
+        await orchestrator.save_state()
+
+    elif request.checkpoint == "final_review":
+        orchestrator.state["status"] = "completed"
+        await orchestrator.save_state()
+
+    return {"status": "approved", "checkpoint": request.checkpoint}
 
 
 @router.post("/character/{project_id}")

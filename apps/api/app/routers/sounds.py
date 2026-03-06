@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.http_client import get_http_client
 from app.rate_limit import check_rate_limit
 
 router = APIRouter(tags=["sounds"])
@@ -56,21 +57,24 @@ async def search_sounds(
     if is_effects_search:
         filters = _build_effects_filters(min_rating, commercial_only)
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        url = "https://freesound.org/apiv2/search/text/"
+    client = await get_http_client()
+    url = "https://freesound.org/apiv2/search/text/"
 
-        # Build URL with filters
-        query_parts = [f"{k}={v}" for k, v in params.items()]
-        for f in filters:
-            query_parts.append(f"filter={f}")
-        full_url = f"{url}?{'&'.join(query_parts)}"
+    # Build URL with filters
+    query_parts = [f"{k}={v}" for k, v in params.items()]
+    for f in filters:
+        query_parts.append(f"filter={f}")
+    full_url = f"{url}?{'&'.join(query_parts)}"
 
+    try:
         response = await client.get(full_url)
+    except httpx.HTTPError:
+        return JSONResponse({"error": "Failed to search sounds"}, status_code=502)
 
-        if response.status_code != 200:
-            return JSONResponse({"error": "Failed to search sounds"}, status_code=response.status_code)
+    if response.status_code != 200:
+        return JSONResponse({"error": "Failed to search sounds"}, status_code=response.status_code)
 
-        data = response.json()
+    data = response.json()
 
     transformed_results = [_transform_result(r) for r in data.get("results", [])]
 

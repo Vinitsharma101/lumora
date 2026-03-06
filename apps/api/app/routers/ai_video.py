@@ -7,14 +7,16 @@ All generation uses cloud APIs — no local models:
 - ElevenLabs (voice/TTS for avatars, sound effects)
 """
 
+import asyncio
+import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import asyncio
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -602,56 +604,56 @@ async def list_ai_jobs(
     ]
 
 @router.websocket("/api/ai/jobs/{job_id}/ws")
-async def ai_job_status_websocket(websocket: WebSocket, job_id: str, db: AsyncSession = Depends(get_db)):
+async def ai_job_status_websocket(websocket: WebSocket, job_id: str):
     """Stream live progress of an AI job via WebSockets."""
+    from app.database import async_session_factory
+
     await websocket.accept()
-    
-    # We poll the DB every 2 seconds for status updates. In a truly scaled 
-    # system we would use Redis Pub/Sub directly, but polling the DB is a 
-    # safe baseline given PostgreSQL is tracking the job states.
+
     try:
         while True:
-            stmt = select(AIJob).where(AIJob.id == job_id)
-            result = await db.execute(stmt)
-            job = result.scalar_one_or_none()
-            
-            if not job:
-                await websocket.send_json({"error": "Job not found"})
-                await websocket.close(code=1000)
-                return
-                
-            response = AIJobStatusResponse(
-                id=job.id,
-                job_type=job.job_type,
-                status=job.status,
-                progress=job.progress,
-                current_step=job.current_step,
-                chunks_total=job.chunks_total,
-                chunks_completed=job.chunks_completed,
-                error_message=job.error_message,
-                output_url=job.output_url,
-                input_data=job.input_data,
-                output_data=job.output_data,
-                provider=job.provider,
-                created_at=job.created_at.isoformat(),
-                completed_at=job.completed_at.isoformat() if job.completed_at else None,
-            )
-            
+            # Use a fresh session per poll to avoid holding a connection open
+            async with async_session_factory() as db:
+                stmt = select(AIJob).where(AIJob.id == job_id)
+                result = await db.execute(stmt)
+                job = result.scalar_one_or_none()
+
+                if not job:
+                    await websocket.send_json({"error": "Job not found"})
+                    await websocket.close(code=1000)
+                    return
+
+                response = AIJobStatusResponse(
+                    id=job.id,
+                    job_type=job.job_type,
+                    status=job.status,
+                    progress=job.progress,
+                    current_step=job.current_step,
+                    chunks_total=job.chunks_total,
+                    chunks_completed=job.chunks_completed,
+                    error_message=job.error_message,
+                    output_url=job.output_url,
+                    input_data=job.input_data,
+                    output_data=job.output_data,
+                    provider=job.provider,
+                    created_at=job.created_at.isoformat(),
+                    completed_at=job.completed_at.isoformat() if job.completed_at else None,
+                )
+
+                is_terminal = job.status in ("completed", "failed")
+
             await websocket.send_json(response.model_dump())
-            
-            if job.status in ("completed", "failed"):
+
+            if is_terminal:
                 await websocket.close(code=1000)
                 break
-                
+
             await asyncio.sleep(2)
-            # Need to expire the session so we get fresh data from the DB
-            # rather than cached sqlalchemy instances on next tick.
-            db.expire(job) 
 
     except WebSocketDisconnect:
-        print(f"Client disconnected from job stream {job_id}")
-    except Exception as e:
-        print(f"WebSocket Error: {e}")
+        logger.debug("Client disconnected from job stream %s", job_id)
+    except Exception:
+        logger.exception("WebSocket error for job %s", job_id)
         try:
             await websocket.close(code=1011)
         except Exception:

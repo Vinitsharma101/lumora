@@ -323,7 +323,7 @@ export function useEditorActions() {
 	useActionHandler(
 		"ask-ai-about-selection",
 		() => {
-			const selectedElements = editor.timeline.getSelectedElements();
+			const selectedElements = editor.selection.getSelectedElements();
 			if (selectedElements.length === 0) return;
 
 			const tracks = editor.timeline.getTracks();
@@ -342,7 +342,7 @@ export function useEditorActions() {
 			for (const selectedId of selectedElements) {
 				for (const track of tracks) {
 					const found = track.elements.find(
-						(element) => element.id === selectedId,
+						(element) => element.id === selectedId.elementId,
 					);
 					if (found) {
 						elements.push({

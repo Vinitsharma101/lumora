@@ -1,7 +1,6 @@
 import { useCallback, useRef } from "react";
 import { useAIChatStore, type ChatMessage, type ToolCallStatus } from "@/stores/ai-chat-store";
 import { useEditor } from "./use-editor";
-import { serializeEditorContext } from "@/lib/ai/context";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { AI_TOOLS, executeToolCall } from "@/lib/ai/tools";
 import { consumeSSEStream } from "@/lib/ai/stream-consumer";
@@ -34,8 +33,7 @@ export function useAIChat() {
 			abortRef.current = abortController;
 
 			try {
-				const context = serializeEditorContext(editor);
-				const systemPrompt = buildSystemPrompt(context);
+				const systemPrompt = buildSystemPrompt(editor);
 
 				const conversationHistory: AIMessage[] = messages.map((m) => ({
 					role: m.role,

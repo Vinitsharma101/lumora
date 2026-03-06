@@ -1,6 +1,7 @@
 """
 Director Agent — The top-level agent for autonomous 1-hour movie generation.
-Generates the Show Bible (characters, visual rules) and breaks the movie into individual scenes.
+Generates the Show Bible (characters, visual rules, voice assignments) and
+breaks the movie into a 3-act structure with multi-shot scenes.
 """
 
 import json
@@ -11,41 +12,104 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 DIRECTOR_SYSTEM_PROMPT = """You are an elite Hollywood Director and Showrunner AI.
-Your job is to take a user's prompt (which may ask for a 1-hour movie or long-form video) 
-and output a comprehensive Show Bible and Scene Breakdown.
+Your job is to take a user's prompt and output a comprehensive Show Bible,
+3-Act Structure, and detailed Scene Breakdown suitable for autonomous AI generation.
 
 Output ONLY valid JSON with this structure:
 {
   "show_bible": {
     "title": "Project Title",
     "logline": "A one-sentence summary of the movie",
+    "genre": "drama/comedy/thriller/sci-fi/horror/documentary/etc",
     "visual_style": "Describe the overall lighting, camera style, color palette, and mood.",
-    "rules": ["Rule 1: No fast cuts", "Rule 2: Always use warm lighting"],
+    "color_palette": ["#1a1a2e", "#16213e", "#0f3460", "#e94560"],
+    "rules": ["Rule 1: consistent warm lighting", "Rule 2: slow deliberate camera movements"],
     "characters": [
       {
         "char_id": "char_1",
         "name": "Alex",
-        "description": "Young professional, wearing a red jacket. Highly detailed visual description for consistent generation."
+        "description": "Young professional in their 30s, short brown hair, wearing a red jacket. Highly detailed visual description for consistent AI generation.",
+        "role": "protagonist",
+        "arc": "Starts uncertain, grows confident through challenges, achieves self-acceptance",
+        "voice_assignment": null,
+        "voice_description": "warm male voice, mid-30s, slight rasp"
       }
     ]
   },
-  "scene_plan": [
+  "acts": [
     {
-      "scene_number": 1,
-      "description": "Opening act: Introduction to the world.",
-      "estimated_duration_seconds": 120
+      "act_number": 1,
+      "title": "Setup",
+      "description": "Introduction to the world and characters",
+      "scenes": [
+        {
+          "scene_number": 1,
+          "description": "Opening: Establishing shot of the city at dawn",
+          "location": "Cityscape, rooftop view",
+          "characters_present": ["char_1"],
+          "dialog": [
+            {
+              "speaker": "char_1",
+              "line": "I never thought I'd end up here.",
+              "direction": "looking out over the city, reflective tone"
+            }
+          ],
+          "shots": [
+            {
+              "type": "establishing",
+              "description": "Wide aerial shot of city skyline at golden hour",
+              "duration": 5,
+              "character_focus": null
+            },
+            {
+              "type": "medium",
+              "description": "Medium shot of Alex on rooftop, wind in hair",
+              "duration": 4,
+              "character_focus": "char_1"
+            },
+            {
+              "type": "close-up",
+              "description": "Close-up of Alex's face, eyes looking at horizon",
+              "duration": 3,
+              "character_focus": "char_1"
+            }
+          ],
+          "estimated_duration_seconds": 12,
+          "tension_level": 3,
+          "mood": "contemplative"
+        }
+      ]
     },
     {
-      "scene_number": 2,
-      "description": "The inciting incident.",
-      "estimated_duration_seconds": 300
+      "act_number": 2,
+      "title": "Confrontation",
+      "description": "Rising action, conflicts, and challenges",
+      "scenes": []
+    },
+    {
+      "act_number": 3,
+      "title": "Resolution",
+      "description": "Climax and resolution",
+      "scenes": []
     }
-  ]
+  ],
+  "pacing": {
+    "tension_curve": [3, 4, 5, 6, 7, 8, 9, 10, 7, 5, 3],
+    "act_1_percentage": 25,
+    "act_2_percentage": 50,
+    "act_3_percentage": 25
+  }
 }
 
-Ensure the scene plan contains enough scenes to roughly cover the requested duration.
-If the user asks for a 1-hour movie, break it down into 10-30 logical scenes (chunks) 
-that can be processed individually by downstream agents.
+KEY REQUIREMENTS:
+- The scene plan MUST contain enough scenes to roughly cover the requested duration
+- For a 1-hour movie: 15-30 scenes across 3 acts
+- Each scene should have 2-5 shots
+- Dialog must have speaker attribution and stage directions
+- Every character needs a detailed visual description for AI image consistency
+- Include voice_description for each character (age, gender, tone, accent)
+- Tension levels 1-10 to guide pacing
+- shot types: establishing, wide, medium, close-up, extreme-close-up, over-the-shoulder, point-of-view, reaction, insert
 """
 
 
@@ -58,10 +122,10 @@ class DirectorAgent:
     async def run(self, state: dict) -> dict:
         """Generate the Show Bible and Scene Plan from the query + Q&A answers."""
         query = state.get("original_query", "Create a cinematic video")
-        
+
         response = await self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=8192,
+            model="claude-sonnet-4-20250514",
+            max_tokens=16384,
             system=DIRECTOR_SYSTEM_PROMPT,
             messages=[{
                 "role": "user",
@@ -82,12 +146,35 @@ class DirectorAgent:
                 "status": "failed"
             }
 
+        # Flatten scenes from acts into a flat scene_plan for backward compatibility
+        # while preserving the full act structure
+        acts = director_plan.get("acts", [])
+        flat_scenes = []
+        for act in acts:
+            for scene in act.get("scenes", []):
+                scene["act_number"] = act.get("act_number", 1)
+                flat_scenes.append(scene)
+
+        # If no acts structure, fall back to legacy flat scene_plan
+        if not flat_scenes:
+            flat_scenes = director_plan.get("scene_plan", [])
+
+        show_bible = director_plan.get("show_bible", {})
+
+        # Extract character profiles for downstream agents
+        character_profiles = {}
+        for char in show_bible.get("characters", []):
+            character_profiles[char["char_id"]] = char
+
         return {
             **state,
-            "show_bible": director_plan.get("show_bible", {}),
-            "scene_plan": director_plan.get("scene_plan", []),
+            "show_bible": show_bible,
+            "acts": acts,
+            "scene_plan": flat_scenes,
+            "character_profiles": character_profiles,
+            "pacing": director_plan.get("pacing", {}),
             "status": "director_complete",
             "messages": state.get("messages", []) + [
-                {"role": "agent", "content": f"Director has created the Show Bible and broken the movie into {len(director_plan.get('scene_plan', []))} scenes."}
+                {"role": "agent", "content": f"Director has created the Show Bible with {len(character_profiles)} characters and broken the movie into {len(acts)} acts with {len(flat_scenes)} scenes."}
             ]
         }

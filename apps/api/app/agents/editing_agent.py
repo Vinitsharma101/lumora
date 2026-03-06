@@ -2,6 +2,8 @@
 Editing Agent — Takes generated assets and the scene plan, then assembles
 a complete multi-track timeline with precise start/end times, transitions,
 text overlays, and audio layering.
+
+Uses actual asset URLs from the GenerationAgent (stored in Supabase).
 """
 
 import logging
@@ -65,11 +67,13 @@ class EditingAgent:
 
             # ── Voiceover / audio track ─────────────────────────────────
             voiceover = scene.get("voiceover")
+            audio_url = asset.get("audio_url")
             if voiceover and voiceover.get("text"):
                 audio_spec = scene.get("audio", {})
                 timeline["tracks"]["audio"].append({
                     "id": f"vo_{scene_id}",
                     "type": "voiceover",
+                    "assetUrl": audio_url or "",
                     "text": voiceover["text"],
                     "startTime": cursor,
                     "duration": dur,
@@ -107,11 +111,13 @@ class EditingAgent:
             cursor += dur
 
         # ── Background music ────────────────────────────────────────────
+        music_url = state.get("music_url")
         music_track = plan.get("music_track")
         if music_track:
             timeline["tracks"]["music"].append({
                 "id": "bg_music",
                 "type": "music",
+                "assetUrl": music_url or "",
                 "description": music_track.get("description", "Background music"),
                 "startTime": 0,
                 "duration": total_duration,
@@ -121,17 +127,22 @@ class EditingAgent:
             })
 
         # ── Sound effects ───────────────────────────────────────────────
+        sfx_generated = state.get("sound_effects_generated", [])
+        sfx_by_scene = {s.get("scene_id"): s for s in sfx_generated if isinstance(s, dict)}
+
         for sfx in plan.get("sound_effects", []):
             scene_start = 0.0
-            # Find the scene's start time
             for s in plan["scenes"]:
                 if s["scene_id"] == sfx.get("scene_id"):
                     break
                 scene_start += s.get("duration", 5)
 
+            generated_sfx = sfx_by_scene.get(sfx.get("scene_id"), {})
+
             timeline["tracks"]["effects"].append({
                 "id": f"sfx_{sfx.get('scene_id', 'x')}_{sfx.get('description', '')[:10]}",
                 "type": "sfx",
+                "assetUrl": generated_sfx.get("audio_url", ""),
                 "description": sfx.get("description", ""),
                 "startTime": scene_start + sfx.get("start_offset", 0),
                 "duration": sfx.get("duration", 1),

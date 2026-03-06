@@ -5,9 +5,8 @@ Uses existing AI providers (Claude/GPT/Gemini) — no local models.
 
 import json
 
-import httpx
-
 from app.config import settings
+from app.http_client import get_http_client
 
 
 async def plan_scenes_from_script(
@@ -63,68 +62,68 @@ Return ONLY valid JSON in this exact format:
 
 
 async def _plan_with_claude(system_prompt: str, user_prompt: str) -> dict:
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": settings.ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 4096,
-                "system": system_prompt,
-                "messages": [{"role": "user", "content": user_prompt}],
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-        text = data["content"][0]["text"]
-        return json.loads(text)
+    client = await get_http_client()
+    response = await client.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": settings.ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 4096,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": user_prompt}],
+        },
+    )
+    response.raise_for_status()
+    data = response.json()
+    text = data["content"][0]["text"]
+    return json.loads(text)
 
 
 async def _plan_with_openai(system_prompt: str, user_prompt: str) -> dict:
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "gpt-4o",
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-        text = data["choices"][0]["message"]["content"]
-        return json.loads(text)
+    client = await get_http_client()
+    response = await client.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "gpt-4o",
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        },
+    )
+    response.raise_for_status()
+    data = response.json()
+    text = data["choices"][0]["message"]["content"]
+    return json.loads(text)
 
 
 async def _plan_with_gemini(system_prompt: str, user_prompt: str) -> dict:
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-            headers={
-                "Content-Type": "application/json",
-                "x-goog-api-key": settings.GOOGLE_AI_API_KEY,
+    client = await get_http_client()
+    response = await client.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": settings.GOOGLE_AI_API_KEY,
+        },
+        json={
+            "contents": [
+                {"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}
+            ],
+            "generationConfig": {
+                "responseMimeType": "application/json",
             },
-            json={
-                "contents": [
-                    {"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}
-                ],
-                "generationConfig": {
-                    "responseMimeType": "application/json",
-                },
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        return json.loads(text)
+        },
+    )
+    response.raise_for_status()
+    data = response.json()
+    text = data["candidates"][0]["content"]["parts"][0]["text"]
+    return json.loads(text)

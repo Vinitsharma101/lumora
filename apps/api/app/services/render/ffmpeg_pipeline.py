@@ -9,13 +9,11 @@ import asyncio
 import os
 import tempfile
 
-import httpx
-
 from app.supabase_client import (
     BUCKET_MEDIA_UPLOADS,
     BUCKET_RENDERED_OUTPUTS,
-    get_storage_url,
-    upload_file,
+    _get_storage_url_sync,
+    _upload_file_sync,
 )
 
 
@@ -107,10 +105,10 @@ async def render_timeline(
         storage_path = f"{user_id}/{job_id}/output.{output_ext}"
         content_type = "video/mp4" if format == "mp4" else "video/webm"
         await asyncio.to_thread(
-            upload_file, BUCKET_RENDERED_OUTPUTS, storage_path, output_data, content_type,
+            _upload_file_sync, BUCKET_RENDERED_OUTPUTS, storage_path, output_data, content_type,
         )
         output_url = await asyncio.to_thread(
-            get_storage_url, BUCKET_RENDERED_OUTPUTS, storage_path, 86400 * 7,
+            _get_storage_url_sync, BUCKET_RENDERED_OUTPUTS, storage_path, 86400 * 7,
         )
 
         return {
@@ -191,8 +189,10 @@ def _build_ffmpeg_command(
 
 async def _download_file(url: str, local_path: str) -> None:
     """Download a file from URL to local path."""
-    async with httpx.AsyncClient(timeout=120) as client:
-        response = await client.get(url, follow_redirects=True)
-        response.raise_for_status()
-        with open(local_path, "wb") as f:
-            f.write(response.content)
+    from app.http_client import get_http_client
+
+    client = await get_http_client()
+    response = await client.get(url)
+    response.raise_for_status()
+    with open(local_path, "wb") as f:
+        f.write(response.content)

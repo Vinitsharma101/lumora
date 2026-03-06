@@ -4,10 +4,8 @@ Uses Replicate's Whisper API to get word-level timestamps,
 then identifies silence gaps. No local models.
 """
 
-from app.services.ai_video.replicate_provider import ReplicateProvider
 
-
-async def detect_silence_from_transcript(
+def detect_silence_from_transcript(
     segments: list[dict],
     min_silence_duration: float = 0.5,
 ) -> list[dict]:
@@ -51,6 +49,8 @@ async def transcribe_for_silence_detection(
 
     Returns both the transcript and detected silence regions.
     """
+    from app.services.ai_video.replicate_provider import ReplicateProvider
+
     provider = ReplicateProvider()
     result = await provider.transcribe_audio(audio_url, language)
     return {

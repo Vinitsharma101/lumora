@@ -2,6 +2,7 @@
 
 Uses the Supabase Python SDK with the service role key for full access.
 All file storage goes through Supabase Storage buckets.
+All sync SDK calls are wrapped with asyncio.to_thread to avoid blocking the event loop.
 """
 
 import asyncio
@@ -19,8 +20,8 @@ BUCKET_THUMBNAILS = "thumbnails"
 BUCKET_AI_OUTPUTS = "ai-outputs"
 
 
-def get_supabase() -> Client:
-    """Get or create the Supabase client singleton."""
+def _get_supabase() -> Client:
+    """Get or create the Supabase client singleton (internal, sync)."""
     global _supabase
     if _supabase is None:
         if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
@@ -34,7 +35,7 @@ def get_supabase() -> Client:
 async def ensure_buckets_exist() -> None:
     """Create storage buckets if they don't exist. Call on startup."""
     def _sync_ensure():
-        client = get_supabase()
+        client = _get_supabase()
         storage = client.storage
 
         buckets = [
@@ -56,35 +57,54 @@ async def ensure_buckets_exist() -> None:
     await asyncio.to_thread(_sync_ensure)
 
 
-def get_storage_url(bucket: str, path: str, expires_in: int = 3600) -> str:
-    """Generate a signed URL for a file in Supabase Storage."""
-    client = get_supabase()
+def _get_storage_url_sync(bucket: str, path: str, expires_in: int = 3600) -> str:
+    client = _get_supabase()
     result = client.storage.from_(bucket).create_signed_url(path, expires_in)
-    # Supabase SDK v2 may return dict with 'signedURL' or 'signedUrl'
     if isinstance(result, dict):
         return result.get("signedURL") or result.get("signedUrl") or result.get("signed_url", "")
     return str(result)
 
 
-def get_public_url(bucket: str, path: str) -> str:
-    """Get the public URL for a file in a public bucket."""
-    client = get_supabase()
-    result = client.storage.from_(bucket).get_public_url(path)
-    return result
+def _get_public_url_sync(bucket: str, path: str) -> str:
+    client = _get_supabase()
+    return client.storage.from_(bucket).get_public_url(path)
 
 
-def upload_file(bucket: str, path: str, file_data: bytes, content_type: str = "application/octet-stream") -> str:
-    """Upload a file to Supabase Storage and return the path."""
-    client = get_supabase()
+def _upload_file_sync(
+    bucket: str, path: str, file_data: bytes, content_type: str = "application/octet-stream"
+) -> str:
+    client = _get_supabase()
     client.storage.from_(bucket).upload(
-        path,
-        file_data,
-        file_options={"content-type": content_type},
+        path, file_data, file_options={"content-type": content_type}
     )
     return path
 
 
-def delete_file(bucket: str, path: str) -> None:
-    """Delete a file from Supabase Storage."""
-    client = get_supabase()
+def _delete_file_sync(bucket: str, path: str) -> None:
+    client = _get_supabase()
     client.storage.from_(bucket).remove([path])
+
+
+# --- Async wrappers (use these from endpoints) ---
+
+
+async def get_storage_url(bucket: str, path: str, expires_in: int = 3600) -> str:
+    """Generate a signed URL for a file in Supabase Storage."""
+    return await asyncio.to_thread(_get_storage_url_sync, bucket, path, expires_in)
+
+
+async def get_public_url(bucket: str, path: str) -> str:
+    """Get the public URL for a file in a public bucket."""
+    return await asyncio.to_thread(_get_public_url_sync, bucket, path)
+
+
+async def upload_file(
+    bucket: str, path: str, file_data: bytes, content_type: str = "application/octet-stream"
+) -> str:
+    """Upload a file to Supabase Storage and return the path."""
+    return await asyncio.to_thread(_upload_file_sync, bucket, path, file_data, content_type)
+
+
+async def delete_file(bucket: str, path: str) -> None:
+    """Delete a file from Supabase Storage."""
+    await asyncio.to_thread(_delete_file_sync, bucket, path)

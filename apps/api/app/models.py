@@ -333,5 +333,9 @@ class AgentSession(Base):
     messages: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Phase 3: Hierarchical progress tracking
+    acts_progress: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    cost_estimate: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

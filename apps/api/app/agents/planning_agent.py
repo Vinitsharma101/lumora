@@ -1,8 +1,9 @@
 """
-Planning Agent — Takes the user's query + answered Q&A and produces a
-detailed scene-by-scene production plan with camera angles, lighting,
+Planning Agent — Takes a scene from the Director's plan and produces a
+detailed production plan with multiple shots, camera angles, lighting,
 character specs, text overlays, audio, and transitions.
-Uses the Anthropic API directly.
+
+Each shot becomes a separate generation unit for the GenerationAgent.
 """
 
 import json
@@ -13,25 +14,26 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 PLANNING_SYSTEM_PROMPT = """You are an expert film director and video editor AI.
-Given a user's creative brief and answered Q&A, produce a detailed production plan.
+Given a scene from a movie's screenplay, produce a detailed production plan
+where each shot is a separate generation unit.
 
 Output ONLY valid JSON with this structure:
 {
-  "title": "Project title",
-  "total_duration": 30,
+  "title": "Scene title",
+  "total_duration": 15,
   "aspect_ratio": "16:9",
   "resolution": {"width": 1920, "height": 1080},
   "style": "cinematic",
   "color_palette": ["#1a1a2e", "#16213e", "#0f3460", "#e94560"],
   "scenes": [
     {
-      "scene_id": "s1",
-      "description": "Opening aerial shot of city at dusk",
+      "scene_id": "s1_shot1",
+      "description": "Establishing wide shot of the location",
       "duration": 5,
       "visual_type": "text_to_video",
-      "prompt": "Detailed generation prompt for this scene with visual specifics",
+      "prompt": "Extremely detailed generation prompt describing exactly what should appear, the visual style, colors, mood, camera angle, and lighting",
       "camera": {
-        "angle": "aerial",
+        "angle": "wide_shot",
         "movement": "slow_dolly_forward",
         "framing": "extreme_wide_shot"
       },
@@ -42,55 +44,72 @@ Output ONLY valid JSON with this structure:
       },
       "character_ids": [],
       "audio": {
-        "type": "music",
-        "description": "Ambient electronic pad, building tension",
-        "volume": 0.7
+        "type": "ambient",
+        "description": "City sounds, distant traffic",
+        "volume": 0.4
       },
-      "voiceover": {
-        "text": "In a world where technology meets creativity...",
-        "voice_style": "deep_narrator",
-        "pace": "slow"
-      },
-      "text_overlays": [
-        {
-          "content": "THE FUTURE IS NOW",
-          "font": "Montserrat",
-          "size": 64,
-          "color": "#FFFFFF",
-          "position": "center",
-          "animation": "fade_up",
-          "start_offset": 1.5,
-          "duration": 3
-        }
-      ],
+      "voiceover": null,
+      "text_overlays": [],
       "transition_in": "fade",
       "transition_out": "dissolve"
+    },
+    {
+      "scene_id": "s1_shot2",
+      "description": "Dialog shot - character speaking",
+      "duration": 4,
+      "visual_type": "text_to_video",
+      "prompt": "Medium shot of character speaking, detailed visual description...",
+      "camera": {"angle": "medium_shot", "movement": "static", "framing": "medium"},
+      "lighting": {"type": "natural", "mood": "neutral", "direction": "front"},
+      "character_ids": ["char_1"],
+      "voiceover": {
+        "text": "The actual dialog line",
+        "voice_style": "conversational",
+        "speaker": "char_1",
+        "emotion": "neutral",
+        "pace": "normal"
+      },
+      "text_overlays": [],
+      "transition_in": "cut",
+      "transition_out": "cut"
     }
   ],
   "characters": [
     {
       "char_id": "char_1",
       "name": "Alex",
-      "description": "Young professional in their 30s, modern clothing, confident",
+      "description": "Detailed visual description for this scene",
       "reference_image_url": null,
-      "consistency_seed": 42
+      "consistency_seed": 42,
+      "style_suffix": "consistent appearance keywords"
     }
   ],
   "music_track": {
-    "description": "Upbeat electronic background music",
-    "bpm": 120,
-    "mood": "energetic",
-    "volume": 0.3
+    "description": "Scene-appropriate music description",
+    "bpm": 90,
+    "mood": "contemplative",
+    "volume": 0.2
   },
   "sound_effects": [
     {
-      "scene_id": "s1",
-      "description": "Whoosh transition",
-      "start_offset": 4.5,
+      "scene_id": "s1_shot1",
+      "description": "Door opening creak",
+      "start_offset": 2.0,
       "duration": 0.5
     }
   ]
 }
+
+SHOT PLANNING RULES:
+- Each scene from the screenplay should have 2-5 shots
+- Dialog scenes MUST have shot/reverse-shot pattern (speaker + reaction)
+- Include establishing shots for new locations
+- Insert shots and close-ups for emotional emphasis
+- Each shot prompt must be extremely detailed for AI video generation
+- Shots within the same scene share location/lighting/characters for coherence
+- Duration of all shots should sum to the scene's estimated_duration_seconds
+- For dialog: create one shot per line, with the speaker as character_focus
+- Voiceover text must contain ONLY the spoken words, not stage directions
 
 Camera angle options:
 - wide_shot, medium_shot, close_up, extreme_close_up
@@ -109,40 +128,42 @@ Lighting options:
 - neon, noir, high_key, low_key, chiaroscuro
 
 Transition options: cut, fade, dissolve, wipe, slide, zoom, glitch
-
-IMPORTANT: The prompt for each scene must be extremely detailed, describing
-exactly what should appear, the visual style, colors, and mood. Include
-camera angle and lighting details directly in the prompt text.
 """
 
 
 class PlanningAgent:
-    """Produces a detailed scene-by-scene plan for autonomous video creation."""
+    """Produces a detailed multi-shot plan for a single scene."""
 
     def __init__(self):
         self.client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     async def run(self, state: dict) -> dict:
-        """Generate the production plan from the query + Q&A answers."""
+        """Generate the production plan from the scene + show bible."""
+        current_scene = state.get("current_scene", {})
+        show_bible = state.get("show_bible", {})
+
+        # Build context about dialog and shots from director
+        scene_context = json.dumps(current_scene, indent=2) if isinstance(current_scene, dict) else str(current_scene)
+
         response = await self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-20250514",
             max_tokens=8192,
             system=PLANNING_SYSTEM_PROMPT,
             messages=[{
                 "role": "user",
-                "content": f"""Create a production plan for ONE scene:
+                "content": f"""Create a multi-shot production plan for this scene:
 
-Scene Objective: {state.get('current_scene', state.get('original_query', ''))}
+Scene Data:
+{scene_context}
 
 Show Bible / Global Rules:
-{json.dumps(state.get('show_bible', {}), indent=2)}
+{json.dumps(show_bible, indent=2)}
 
-Available Media Assets:
-{json.dumps(state.get('clarified_context', {}).get('media_assets', []), indent=2)}
+Character Profiles:
+{json.dumps(state.get('character_profiles', {}), indent=2)}
 
-Create a detailed production plan for this specific scene with camera angles,
-lighting, text overlays, voiceovers, and sound effects.
-Duration should match the estimated_duration_seconds from the scene objective or default to 15s.
+Duration should match the estimated_duration_seconds from the scene or default to 15s.
+Break this scene into 2-5 shots with detailed generation prompts.
 """
             }]
         )
@@ -157,11 +178,21 @@ Duration should match the estimated_duration_seconds from the scene objective or
             return {
                 **state,
                 "scene_plan": {},
-                "error": f"Planning failed: could not parse scene plan",
+                "error": "Planning failed: could not parse scene plan",
                 "status": "failed"
             }
 
         characters = {c["char_id"]: c for c in plan.get("characters", [])}
+
+        # Merge character data from show bible into plan characters
+        for char_id, profile in state.get("character_profiles", {}).items():
+            if char_id not in characters:
+                characters[char_id] = profile
+            else:
+                # Enrich plan characters with show bible data
+                for key in ("description", "voice_description", "arc", "voice_assignment"):
+                    if profile.get(key) and not characters[char_id].get(key):
+                        characters[char_id][key] = profile[key]
 
         return {
             **state,
@@ -169,6 +200,6 @@ Duration should match the estimated_duration_seconds from the scene objective or
             "character_profiles": characters,
             "status": "generating",
             "messages": state.get("messages", []) + [
-                {"role": "agent", "content": f"Plan created: {plan.get('title', 'Untitled')} — {len(plan.get('scenes', []))} scenes, {plan.get('total_duration', 0)}s total"}
+                {"role": "agent", "content": f"Plan created: {plan.get('title', 'Untitled')} - {len(plan.get('scenes', []))} shots, {plan.get('total_duration', 0)}s total"}
             ]
         }

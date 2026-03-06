@@ -3,10 +3,11 @@
 import time
 
 from fastapi import HTTPException, Request
-from redis.asyncio import Redis
+from redis.asyncio import ConnectionPool, Redis
 
 from app.config import settings
 
+_pool: ConnectionPool | None = None
 _redis: Redis | None = None
 
 RATE_LIMIT_WINDOW = 60  # seconds
@@ -14,10 +15,24 @@ RATE_LIMIT_MAX_REQUESTS = 100
 
 
 async def get_redis() -> Redis:
-    global _redis
+    global _pool, _redis
     if _redis is None:
-        _redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        _pool = ConnectionPool.from_url(
+            settings.REDIS_URL, decode_responses=True, max_connections=20
+        )
+        _redis = Redis(connection_pool=_pool)
     return _redis
+
+
+async def close_redis() -> None:
+    """Close Redis connections. Call from lifespan shutdown."""
+    global _pool, _redis
+    if _redis is not None:
+        await _redis.aclose()
+        _redis = None
+    if _pool is not None:
+        await _pool.aclose()
+        _pool = None
 
 
 async def check_rate_limit(request: Request) -> None:

@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 
 class CreateSessionRequest(BaseModel):
-    userId: str
     projectId: str
     provider: Literal["claude", "openai", "gemini"]
     title: str | None = None

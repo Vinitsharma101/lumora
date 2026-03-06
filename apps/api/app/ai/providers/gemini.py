@@ -6,11 +6,17 @@ import google.generativeai as genai
 from .types import AIMessage, AIProviderName, StreamChunk, ToolCall, ToolDefinition
 
 
+_configured_key: str | None = None
+
+
 class GeminiProvider:
     name: AIProviderName = "gemini"
 
     def __init__(self, api_key: str):
-        genai.configure(api_key=api_key)
+        global _configured_key
+        if _configured_key != api_key:
+            genai.configure(api_key=api_key)
+            _configured_key = api_key
         self._api_key = api_key
 
     async def chat(

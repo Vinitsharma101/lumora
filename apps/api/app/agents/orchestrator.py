@@ -55,6 +55,8 @@ class AgentOrchestrator:
             video_map={},
             global_style_context={},
             review_notes=[],
+            acts_progress={},
+            cost_estimate={},
             status="started",
             messages=[],
             error=None,
@@ -115,7 +117,7 @@ class AgentOrchestrator:
                 project_id=model.project_id,
                 user_id=model.user_id,
                 original_query=model.query,
-                clarified_context={"media_assets": []}, # Basic default
+                clarified_context={"media_assets": []},
                 pending_questions=model.pending_questions or [],
                 answered_questions=model.answered_questions or {},
                 scene_plan=model.plan or {},
@@ -128,6 +130,8 @@ class AgentOrchestrator:
                 video_map=model.video_map or {},
                 global_style_context=model.global_style_context or {},
                 review_notes=model.review_notes or [],
+                acts_progress=model.acts_progress or {},
+                cost_estimate=model.cost_estimate or {},
                 status=model.status,
                 messages=model.messages or [],
                 error=model.error,
@@ -157,6 +161,8 @@ class AgentOrchestrator:
                 model.review_notes = self.state.get("review_notes", [])
                 model.messages = self.state.get("messages", [])
                 model.error = self.state.get("error")
+                model.acts_progress = self.state.get("acts_progress", {})
+                model.cost_estimate = self.state.get("cost_estimate", {})
                 model.updated_at = datetime.now(timezone.utc)
                 await db.commit()
 
@@ -193,6 +199,8 @@ class AgentOrchestrator:
             "review_suggestions": self.state.get("review_suggestions", []),
             "messages": self.state.get("messages", []),
             "error": self.state.get("error"),
+            "acts_progress": self.state.get("acts_progress", {}),
+            "cost_estimate": self.state.get("cost_estimate"),
         }
 
     @classmethod

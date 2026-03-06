@@ -5,9 +5,8 @@ NOTE: The OpenAI video generation API endpoint is forward-looking; the actual
 endpoint and payload format may change when Sora's API becomes publicly available.
 """
 
-import httpx
-
 from app.config import settings
+from app.http_client import get_http_client
 
 
 class SoraProvider:
@@ -37,50 +36,50 @@ class SoraProvider:
             "1:1": "1080x1080",
         }
 
-        async with httpx.AsyncClient(timeout=300) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/videos/generations",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "sora",
-                    "prompt": prompt,
-                    "size": size_map.get(aspect_ratio, "1920x1080"),
-                    "duration": duration,
-                    "n": 1,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
+        client = await get_http_client()
+        response = await client.post(
+            "https://api.openai.com/v1/videos/generations",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "sora",
+                "prompt": prompt,
+                "size": size_map.get(aspect_ratio, "1920x1080"),
+                "duration": duration,
+                "n": 1,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
 
-            return {
-                "provider": "openai_sora",
-                "generation_id": data.get("id"),
-                "status": "processing",
-                "raw_response": data,
-            }
+        return {
+            "provider": "openai_sora",
+            "generation_id": data.get("id"),
+            "status": "processing",
+            "raw_response": data,
+        }
 
     async def check_generation(self, generation_id: str) -> dict:
         """Check the status of a Sora video generation."""
         self._ensure_key()
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
-                f"https://api.openai.com/v1/videos/generations/{generation_id}",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-            )
-            response.raise_for_status()
-            data = response.json()
+        client = await get_http_client()
+        response = await client.get(
+            f"https://api.openai.com/v1/videos/generations/{generation_id}",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+        )
+        response.raise_for_status()
+        data = response.json()
 
-            status = data.get("status", "processing")
-            result = {
-                "status": status,
-                "raw_response": data,
-            }
+        status = data.get("status", "processing")
+        result = {
+            "status": status,
+            "raw_response": data,
+        }
 
-            if status == "completed":
-                result["video_url"] = data.get("data", [{}])[0].get("url")
+        if status == "completed":
+            result["video_url"] = data.get("data", [{}])[0].get("url")
 
-            return result
+        return result

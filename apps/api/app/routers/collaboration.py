@@ -7,7 +7,6 @@ Project sharing and collaborator management via REST endpoints.
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -33,7 +32,7 @@ _rooms: dict[str, dict[str, WebSocket]] = {}
 
 async def _verify_project_access(
     db: AsyncSession, project_id: str, user_id: str
-) -> Optional[str]:
+) -> str | None:
     """Return the user's role if they have access, else None."""
     project = await db.get(Project, project_id)
     if not project:
@@ -134,24 +133,25 @@ async def list_collaborators(
     if not role:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    stmt = select(ProjectCollaborator).where(
-        ProjectCollaborator.project_id == project_id,
+    # Join with User to avoid N+1 queries
+    stmt = (
+        select(ProjectCollaborator, User)
+        .join(User, ProjectCollaborator.user_id == User.id)
+        .where(ProjectCollaborator.project_id == project_id)
     )
     result = await db.execute(stmt)
-    collabs = result.scalars().all()
+    rows = result.all()
 
-    items = []
-    for collab in collabs:
-        target = await db.get(User, collab.user_id)
-        items.append(
-            CollaboratorResponse(
-                id=collab.id,
-                project_id=collab.project_id,
-                user_id=collab.user_id,
-                email=target.email if target else "",
-                role=collab.role,
-            )
+    items = [
+        CollaboratorResponse(
+            id=collab.id,
+            project_id=collab.project_id,
+            user_id=collab.user_id,
+            email=target_user.email,
+            role=collab.role,
         )
+        for collab, target_user in rows
+    ]
 
     return {"collaborators": items}
 
@@ -207,8 +207,8 @@ async def collaboration_websocket(
 
     await websocket.accept()
 
-    user_id: Optional[str] = None
-    user_role: Optional[str] = None
+    user_id: str | None = None
+    user_role: str | None = None
 
     try:
         # Wait for auth message

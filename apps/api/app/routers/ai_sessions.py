@@ -6,8 +6,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import get_current_user
 from app.database import get_db
-from app.models import AIChatMessage, AIChatSession
+from app.models import AIChatMessage, AIChatSession, User
 from app.rate_limit import check_rate_limit
 from app.schemas.sessions import (
     CreateMessageRequest,
@@ -21,11 +22,12 @@ router = APIRouter(tags=["ai-sessions"])
 
 @router.get("/api/ai/sessions")
 async def list_sessions(
-    userId: str = Query(...),
+    request: Request,
     projectId: str | None = Query(None),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(AIChatSession).where(AIChatSession.user_id == userId)
+    query = select(AIChatSession).where(AIChatSession.user_id == user.id)
     if projectId:
         query = query.where(AIChatSession.project_id == projectId)
     query = query.order_by(AIChatSession.updated_at.desc())
@@ -39,6 +41,7 @@ async def list_sessions(
 async def create_session(
     body: CreateSessionRequest,
     request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await check_rate_limit(request)
@@ -48,7 +51,7 @@ async def create_session(
 
     session = AIChatSession(
         id=session_id,
-        user_id=body.userId,
+        user_id=user.id,
         project_id=body.projectId,
         provider=body.provider,
         title=body.title or "New Chat",
@@ -61,9 +64,16 @@ async def create_session(
 
 
 @router.get("/api/ai/sessions/{session_id}")
-async def get_session(session_id: str, db: AsyncSession = Depends(get_db)):
+async def get_session(
+    session_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(
-        select(AIChatSession).where(AIChatSession.id == session_id)
+        select(AIChatSession).where(
+            AIChatSession.id == session_id,
+            AIChatSession.user_id == user.id,
+        )
     )
     session = result.scalar_one_or_none()
     if not session:
@@ -84,10 +94,25 @@ async def get_session(session_id: str, db: AsyncSession = Depends(get_db)):
 async def delete_session(
     session_id: str,
     request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await check_rate_limit(request)
-    await db.execute(delete(AIChatSession).where(AIChatSession.id == session_id))
+
+    # Only delete if owned by the current user
+    result = await db.execute(
+        select(AIChatSession).where(
+            AIChatSession.id == session_id,
+            AIChatSession.user_id == user.id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+
+    await db.execute(
+        delete(AIChatSession).where(AIChatSession.id == session_id)
+    )
     await db.commit()
     return {"success": True}
 
@@ -97,9 +122,21 @@ async def create_message(
     session_id: str,
     body: CreateMessageRequest,
     request: Request,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await check_rate_limit(request)
+
+    # Verify session ownership
+    result = await db.execute(
+        select(AIChatSession).where(
+            AIChatSession.id == session_id,
+            AIChatSession.user_id == user.id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
 
     message_id = str(uuid4())
     now = datetime.now(timezone.utc)
@@ -116,12 +153,7 @@ async def create_message(
     db.add(message)
 
     # Update session timestamp
-    result = await db.execute(
-        select(AIChatSession).where(AIChatSession.id == session_id)
-    )
-    session = result.scalar_one_or_none()
-    if session:
-        session.updated_at = now
+    session.updated_at = now
 
     await db.commit()
     return {"id": message_id}
