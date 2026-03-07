@@ -50,6 +50,32 @@ export class TimelineManager {
 		this.editor.command.execute({ command });
 	}
 
+	/**
+	 * Insert multiple elements as a single atomic undo entry.
+	 * All inserts are wrapped in a BatchCommand so one Cmd+Z undoes all of them.
+	 */
+	insertElements(items: InsertElementParams[]): void {
+		if (items.length === 0) return;
+		if (items.length === 1) {
+			this.insertElement(items[0]);
+			return;
+		}
+		const commands = items.map(
+			({ element, placement }) => new InsertElementCommand({ element, placement }),
+		);
+		const batch = new BatchCommand(commands);
+		this.editor.command.execute({ command: batch });
+	}
+
+	/**
+	 * Returns a monotonically increasing version number that increments
+	 * whenever the timeline or media changes. Used by the renderer to
+	 * determine whether to rebuild the scene tree.
+	 */
+	getVersion(): number {
+		return this.editor.command.getHistoryLength();
+	}
+
 	updateElementTrim({
 		elementId,
 		trimStart,

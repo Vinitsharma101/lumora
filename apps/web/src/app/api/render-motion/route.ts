@@ -85,14 +85,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 		// Render to a temporary file
 		const outputPath = join(
 			tmpdir(),
-			`gracecut-motion-${compositionId}-${Date.now()}.mp4`,
+			`gracecut-motion-${compositionId}-${Date.now()}.webm`,
 		);
 
 		console.log("[render-motion] Rendering to:", outputPath);
 		const renderPromise = renderMedia({
 			composition,
 			serveUrl: bundlePath,
-			codec: "h264",
+			codec: "vp8",
 			outputLocation: outputPath,
 			inputProps: props,
 		});
@@ -118,8 +118,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 		return new NextResponse(new Uint8Array(videoBuffer), {
 			status: 200,
 			headers: {
-				"Content-Type": "video/mp4",
-				"Content-Disposition": `attachment; filename="${compositionId}.mp4"`,
+				"Content-Type": "video/webm",
+				"Content-Disposition": `attachment; filename="${compositionId}.webm"`,
 				"Content-Length": String(videoBuffer.length),
 			},
 		});

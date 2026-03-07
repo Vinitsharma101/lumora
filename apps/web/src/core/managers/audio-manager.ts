@@ -283,19 +283,19 @@ export class AudioManager {
 		targetAhead: number;
 	}): Promise<void> {
 		return new Promise((resolve) => {
-			const checkInterval = setInterval(() => {
+			const check = () => {
 				if (!this.editor.playback.getIsPlaying()) {
-					clearInterval(checkInterval);
 					resolve();
 					return;
 				}
-
 				const playbackTime = this.getPlaybackTime();
 				if (timelineTime - playbackTime < targetAhead) {
-					clearInterval(checkInterval);
 					resolve();
+					return;
 				}
-			}, 100);
+				requestAnimationFrame(check);
+			};
+			requestAnimationFrame(check);
 		});
 	}
 

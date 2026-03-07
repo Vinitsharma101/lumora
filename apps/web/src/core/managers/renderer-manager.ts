@@ -12,6 +12,17 @@ export class RendererManager {
 	private renderTree: RootNode | null = null;
 	private listeners = new Set<() => void>();
 
+	/**
+	 * Version-stamped scene-tree cache.
+	 * We only rebuild `buildScene()` when the timeline or media has changed
+	 * (detected via `timeline.getVersion()` + media asset count).
+	 * During scrubbing, the same tree instance is reused and only `time` changes,
+	 * avoiding the expensive teardown and recreation of all node objects.
+	 */
+	private cachedScene: RootNode | null = null;
+	private cachedSceneVersion = -1;
+	private cachedMediaCount = -1;
+
 	constructor(private editor: EditorCore) {}
 
 	setRenderTree({ renderTree }: { renderTree: RootNode | null }): void {
@@ -21,6 +32,44 @@ export class RendererManager {
 
 	getRenderTree(): RootNode | null {
 		return this.renderTree;
+	}
+
+	/**
+	 * Returns a cached scene tree, rebuilding it only when the timeline
+	 * version or media asset count has changed since the last call.
+	 * Safe to call every rAF tick — the cache check is O(1).
+	 */
+	getOrBuildScene(): RootNode {
+		const timelineVersion = this.editor.timeline.getVersion();
+		const mediaCount = this.editor.media.getAssets().length;
+
+		if (
+			this.cachedScene !== null &&
+			timelineVersion === this.cachedSceneVersion &&
+			mediaCount === this.cachedMediaCount
+		) {
+			return this.cachedScene;
+		}
+
+		const tracks = this.editor.timeline.getTracks();
+		const mediaAssets = this.editor.media.getAssets();
+		const duration = this.editor.timeline.getTotalDuration();
+		const activeProject = this.editor.project.getActive();
+		const canvasSize = activeProject?.settings.canvasSize ?? { width: 1920, height: 1080 };
+		const background = activeProject?.settings.background ?? { type: "color" as const, color: "#000000" };
+
+		const scene = buildScene({ tracks, mediaAssets, duration, canvasSize, background, isPreview: true });
+		this.cachedScene = scene;
+		this.cachedSceneVersion = timelineVersion;
+		this.cachedMediaCount = mediaCount;
+		return scene;
+	}
+
+	/** Invalidate the scene cache (e.g. when canvas size or background changes). */
+	invalidateSceneCache(): void {
+		this.cachedScene = null;
+		this.cachedSceneVersion = -1;
+		this.cachedMediaCount = -1;
 	}
 
 	async saveSnapshot(): Promise<{ success: boolean; error?: string }> {
@@ -91,8 +140,7 @@ export class RendererManager {
 	}: {
 		options: ExportOptions;
 	}): Promise<ExportResult> {
-		const { format, quality, fps, includeAudio, onProgress, onCancel } =
-			options;
+		const { format, quality, fps, includeAudio, onProgress, onCancel } = options;
 
 		try {
 			const tracks = this.editor.timeline.getTracks();
@@ -121,6 +169,8 @@ export class RendererManager {
 				});
 			}
 
+			// Export always uses a fresh scene to guarantee accuracy;
+			// `getOrBuildScene` is for the live preview only.
 			const scene = buildScene({
 				tracks,
 				mediaAssets,

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useEditor } from "@/hooks/use-editor";
+import { useSelectionEditor } from "@/hooks/use-editor-domain";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -23,7 +23,7 @@ const CATEGORY_ICONS: Record<FilterCategory, string> = {
 };
 
 export function FiltersView() {
-	const editor = useEditor();
+	const editor = useSelectionEditor();
 	const activeElements = editor.selection.getSelectedElements();
 	const [selectedCategory, setSelectedCategory] = useState<FilterCategory | "all">("all");
 	const [searchQuery, setSearchQuery] = useState("");

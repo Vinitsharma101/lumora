@@ -1,5 +1,8 @@
 import type { EditorCore } from "@/core";
-import type { TimelineTrack, TimelineElement, TScene } from "@/types/timeline";
+import type { TimelineTrack, TimelineElement } from "@/types/timeline";
+
+/** Maximum number of individual elements sent in AI context before we summarize. */
+const MAX_ELEMENTS_IN_CONTEXT = 50;
 
 export interface EditorContext {
 	canvas: {
@@ -12,13 +15,20 @@ export interface EditorContext {
 	currentTime: number;
 	tracks: TrackSummary[];
 	mediaAssets: MediaAssetSummary[];
+	/** True when the element list was truncated to fit the token budget. */
+	isTruncated?: boolean;
+	/** Total element count across all tracks (when isTruncated is true). */
+	totalElementCount?: number;
 }
 
 interface TrackSummary {
 	id: string;
 	name: string;
 	type: string;
-	elements: ElementSummary[];
+	/** Present when NOT truncated — full list of per-element summaries. */
+	elements?: ElementSummary[];
+	/** Present when IS truncated — compact one-liner per track. */
+	elementSummary?: string;
 }
 
 interface ElementSummary {
@@ -53,12 +63,27 @@ function summarizeElement(el: TimelineElement): ElementSummary {
 	return summary;
 }
 
-function summarizeTrack(track: TimelineTrack): TrackSummary {
+function summarizeTrackFull(track: TimelineTrack): TrackSummary {
 	return {
 		id: track.id,
 		name: track.name,
 		type: track.type,
 		elements: track.elements.map(summarizeElement),
+	};
+}
+
+function summarizeTrackCompact(track: TimelineTrack): TrackSummary {
+	const count = track.elements.length;
+	const minStart = count > 0 ? Math.min(...track.elements.map((e) => e.startTime)) : 0;
+	const maxEnd =
+		count > 0
+			? Math.max(...track.elements.map((e) => e.startTime + e.duration))
+			: 0;
+	return {
+		id: track.id,
+		name: track.name,
+		type: track.type,
+		elementSummary: `${count} ${track.type} element(s) spanning ${minStart.toFixed(1)}s–${maxEnd.toFixed(1)}s`,
 	};
 }
 
@@ -76,12 +101,19 @@ export function serializeEditorContext(editor: EditorCore): EditorContext {
 	const bgColor = bg?.type === "color" ? bg.color : "#000000";
 
 	let maxDuration = 0;
+	let totalElementCount = 0;
 	for (const track of tracks) {
+		totalElementCount += track.elements.length;
 		for (const el of track.elements) {
 			const end = el.startTime + el.duration;
 			if (end > maxDuration) maxDuration = end;
 		}
 	}
+
+	const isTruncated = totalElementCount > MAX_ELEMENTS_IN_CONTEXT;
+	const trackSummaries: TrackSummary[] = isTruncated
+		? tracks.map(summarizeTrackCompact)
+		: tracks.map(summarizeTrackFull);
 
 	return {
 		canvas: {
@@ -92,12 +124,16 @@ export function serializeEditorContext(editor: EditorCore): EditorContext {
 		},
 		duration: maxDuration,
 		currentTime: editor.playback.getCurrentTime(),
-		tracks: tracks.map(summarizeTrack),
+		tracks: trackSummaries,
 		mediaAssets: mediaAssets.map((a) => ({
 			id: a.id,
 			name: a.name,
 			type: a.type,
 			duration: a.duration,
 		})),
+		...(isTruncated && {
+			isTruncated: true,
+			totalElementCount,
+		}),
 	};
 }

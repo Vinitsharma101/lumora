@@ -141,8 +141,10 @@ export async function executeToolCall(
 				const sharedBg = (args.backgroundColor as string) ?? "#000000";
 				const sharedPosY = (args.positionY as number) ?? 0.35;
 
-				for (const cap of captions) {
-					const element = buildTextElement({
+				// Build all elements first, then insert as a single atomic batch
+				// so that Cmd+Z removes all captions in one undo step.
+				const items = captions.map((cap) => ({
+					element: buildTextElement({
 						raw: {
 							name: cap.content.slice(0, 30),
 							content: cap.content,
@@ -156,13 +158,11 @@ export async function executeToolCall(
 							transform: { scale: 1, position: { x: 0, y: sharedPosY }, rotate: 0 },
 						},
 						startTime: cap.startTime,
-					});
+					}),
+					placement: { mode: "auto" } as const,
+				}));
 
-					editor.timeline.insertElement({
-						element,
-						placement: { mode: "auto" },
-					});
-				}
+				editor.timeline.insertElements(items);
 
 				return {
 					success: true,
@@ -597,8 +597,8 @@ export async function executeToolCall(
 				}
 
 				const blob = await response.blob();
-				const file = new File([blob], `${compositionId}-${Date.now()}.mp4`, {
-					type: "video/mp4",
+				const file = new File([blob], `${compositionId}-${Date.now()}.webm`, {
+					type: "video/webm",
 				});
 
 				const projectId = editor.project.getActive()?.metadata.id;
