@@ -114,8 +114,10 @@ export const AI_TOOLS: ToolDefinition[] = [
 					description: "Array of captions with content, startTime, and duration",
 				},
 				fontSize: { type: "number", description: "Shared font size for all captions" },
+				fontFamily: { type: "string", description: "Shared font family (e.g. Anton, Bangers, Montserrat)" },
 				color: { type: "string", description: "Shared text color for all captions" },
 				backgroundColor: { type: "string", description: "Shared background color" },
+				animation: { type: "string", enum: ["none", "pop_in"], description: "Optional entrance animation" },
 				positionY: {
 					type: "number",
 					description: "Shared vertical position for all captions",
@@ -264,7 +266,7 @@ export const AI_TOOLS: ToolDefinition[] = [
 	{
 		name: "generate_music",
 		description:
-			"Generate background music using AI (Suno) and add it to the timeline.",
+			"Generate background music using AI and add it to the timeline.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -561,6 +563,63 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 			},
 			required: ["mediaUrl", "mediaType"],
+		},
+	},
+
+	// ── Stock Music Search ──
+	{
+		name: "search_stock_music",
+		description:
+			"Search for royalty-free stock music from Pixabay. Returns matching tracks with preview URLs that can be added to the timeline.",
+		parameters: {
+			type: "object",
+			properties: {
+				query: {
+					type: "string",
+					description: "Search query (e.g., 'upbeat corporate', 'calm piano', 'epic cinematic')",
+				},
+			},
+			required: ["query"],
+		},
+	},
+
+	// ── Visual Feedback Loop ──
+	{
+		name: "sample_timeline_frames",
+		description:
+			"Sample frames from the current timeline at evenly-spaced intervals. Returns base64 JPEG images for visual review. Use this after making edits to verify they look correct.",
+		parameters: {
+			type: "object",
+			properties: {
+				count: {
+					type: "number",
+					description: "Number of frames to sample (default: 4, max: 8)",
+				},
+				startTime: {
+					type: "number",
+					description: "Start time in seconds (default: 0)",
+				},
+				endTime: {
+					type: "number",
+					description: "End time in seconds (default: end of timeline)",
+				},
+			},
+			required: [],
+		},
+	},
+	{
+		name: "review_composition",
+		description:
+			"Sample frames from the current timeline and review them with AI vision to check for issues (text positioning, animation timing, scaling, visual coherence). Returns structured feedback or approval.",
+		parameters: {
+			type: "object",
+			properties: {
+				goal: {
+					type: "string",
+					description: "What the edit should achieve (e.g., 'title text centered with good contrast')",
+				},
+			},
+			required: ["goal"],
 		},
 	},
 

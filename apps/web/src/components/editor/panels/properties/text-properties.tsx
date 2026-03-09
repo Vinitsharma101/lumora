@@ -5,6 +5,13 @@ import { NumberField } from "@/components/ui/number-field";
 import { useRef } from "react";
 import { Section, SectionContent, SectionField, SectionFields, SectionHeader } from "./section";
 import { ColorPicker } from "@/components/ui/color-picker";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { uppercase } from "@/utils/string";
 import { clamp } from "@/utils/math";
 import { useEditor } from "@/hooks/use-editor";
@@ -59,6 +66,11 @@ export function TextProperties({
 			<BlendingSection element={element} trackId={trackId} />
 			<TypographySection element={element} trackId={trackId} />
 			<SpacingSection element={element} trackId={trackId} />
+			<StrokeSection element={element} trackId={trackId} />
+			<ShadowSection element={element} trackId={trackId} />
+			{element.caption?.wordTimings && element.caption.wordTimings.length > 0 && (
+				<CaptionEffectsSection element={element} trackId={trackId} />
+			)}
 			<BackgroundSection element={element} trackId={trackId} />
 		</div>
 	);
@@ -274,6 +286,278 @@ function SpacingSection({
 				</SectionField>
 			</div>
 		</SectionContent>
+		</Section>
+	);
+}
+
+function StrokeSection({
+	element,
+	trackId,
+}: {
+	element: TextElement;
+	trackId: string;
+}) {
+	const editor = useEditor();
+
+	const strokeWidth = usePropertyDraft({
+		displayValue: Math.round(element.stroke?.width ?? 0).toString(),
+		parse: (input) => {
+			const parsed = parseFloat(input);
+			return Number.isNaN(parsed) ? null : Math.max(0, Math.round(parsed));
+		},
+		onPreview: (value) =>
+			editor.timeline.previewElements({
+				updates: [
+					{
+						trackId,
+						elementId: element.id,
+						updates: {
+							stroke: {
+								color: element.stroke?.color ?? "#000000",
+								width: value,
+							},
+						},
+					},
+				],
+			}),
+		onCommit: () => editor.timeline.commitPreview(),
+	});
+
+	return (
+		<Section collapsible sectionKey="text:stroke">
+			<SectionHeader title="Stroke" />
+			<SectionContent>
+				<SectionFields>
+					<SectionField label="Color">
+						<ColorPicker
+							value={uppercase({
+								string: (element.stroke?.color ?? "000000").replace("#", ""),
+							})}
+							onChange={(color) =>
+								editor.timeline.previewElements({
+									updates: [
+										{
+											trackId,
+											elementId: element.id,
+											updates: {
+												stroke: {
+													color: `#${color}`,
+													width: element.stroke?.width ?? 0,
+												},
+											},
+										},
+									],
+								})
+							}
+							onChangeEnd={() => editor.timeline.commitPreview()}
+						/>
+					</SectionField>
+					<SectionField label="Width">
+						<NumberField
+							icon="W"
+							value={strokeWidth.displayValue}
+							min={0}
+							onFocus={strokeWidth.onFocus}
+							onChange={strokeWidth.onChange}
+							onBlur={strokeWidth.onBlur}
+							onScrub={strokeWidth.scrubTo}
+							onScrubEnd={strokeWidth.commitScrub}
+							onReset={() =>
+								editor.timeline.updateElements({
+									updates: [
+										{
+											trackId,
+											elementId: element.id,
+											updates: { stroke: undefined },
+										},
+									],
+								})
+							}
+							isDefault={!element.stroke}
+						/>
+					</SectionField>
+				</SectionFields>
+			</SectionContent>
+		</Section>
+	);
+}
+
+function ShadowSection({
+	element,
+	trackId,
+}: {
+	element: TextElement;
+	trackId: string;
+}) {
+	const editor = useEditor();
+
+	const shadowBlur = usePropertyDraft({
+		displayValue: Math.round(element.shadow?.blur ?? 0).toString(),
+		parse: (input) => {
+			const parsed = parseFloat(input);
+			return Number.isNaN(parsed) ? null : Math.max(0, Math.round(parsed));
+		},
+		onPreview: (value) =>
+			editor.timeline.previewElements({
+				updates: [
+					{
+						trackId,
+						elementId: element.id,
+						updates: {
+							shadow: {
+								color: element.shadow?.color ?? "rgba(0,0,0,0.5)",
+								blur: value,
+								offsetX: element.shadow?.offsetX ?? 2,
+								offsetY: element.shadow?.offsetY ?? 2,
+							},
+						},
+					},
+				],
+			}),
+		onCommit: () => editor.timeline.commitPreview(),
+	});
+
+	return (
+		<Section collapsible sectionKey="text:shadow">
+			<SectionHeader title="Shadow" />
+			<SectionContent>
+				<SectionFields>
+					<SectionField label="Color">
+						<ColorPicker
+							value={uppercase({
+								string: (element.shadow?.color ?? "000000").replace("#", "").replace(/rgba?\([^)]+\)/, "000000"),
+							})}
+							onChange={(color) =>
+								editor.timeline.previewElements({
+									updates: [
+										{
+											trackId,
+											elementId: element.id,
+											updates: {
+												shadow: {
+													color: `#${color}`,
+													blur: element.shadow?.blur ?? 5,
+													offsetX: element.shadow?.offsetX ?? 2,
+													offsetY: element.shadow?.offsetY ?? 2,
+												},
+											},
+										},
+									],
+								})
+							}
+							onChangeEnd={() => editor.timeline.commitPreview()}
+						/>
+					</SectionField>
+					<SectionField label="Blur">
+						<NumberField
+							icon="B"
+							value={shadowBlur.displayValue}
+							min={0}
+							onFocus={shadowBlur.onFocus}
+							onChange={shadowBlur.onChange}
+							onBlur={shadowBlur.onBlur}
+							onScrub={shadowBlur.scrubTo}
+							onScrubEnd={shadowBlur.commitScrub}
+							onReset={() =>
+								editor.timeline.updateElements({
+									updates: [
+										{
+											trackId,
+											elementId: element.id,
+											updates: { shadow: undefined },
+										},
+									],
+								})
+							}
+							isDefault={!element.shadow}
+						/>
+					</SectionField>
+				</SectionFields>
+			</SectionContent>
+		</Section>
+	);
+}
+
+function CaptionEffectsSection({
+	element,
+	trackId,
+}: {
+	element: TextElement;
+	trackId: string;
+}) {
+	const editor = useEditor();
+
+	const updateCaption = (updates: Partial<NonNullable<TextElement["caption"]>>) => {
+		editor.timeline.updateElements({
+			updates: [
+				{
+					trackId,
+					elementId: element.id,
+					updates: {
+						caption: { ...element.caption, ...updates },
+					},
+				},
+			],
+		});
+	};
+
+	return (
+		<Section collapsible sectionKey="text:caption-effects">
+			<SectionHeader title="Caption Effects" />
+			<SectionContent>
+				<SectionFields>
+					<SectionField label="Animation">
+						<Select
+							value={element.caption?.animationType ?? "none"}
+							onValueChange={(value) =>
+								updateCaption({ animationType: value as NonNullable<TextElement["caption"]>["animationType"] })
+							}
+						>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="none">None</SelectItem>
+								<SelectItem value="karaoke">Karaoke</SelectItem>
+								<SelectItem value="typewriter">Typewriter</SelectItem>
+								<SelectItem value="bounce">Bounce</SelectItem>
+								<SelectItem value="wave">Wave</SelectItem>
+								<SelectItem value="pop-in">Pop In</SelectItem>
+							</SelectContent>
+						</Select>
+					</SectionField>
+					<SectionField label="Highlight">
+						<Select
+							value={element.caption?.highlightEffect ?? "color"}
+							onValueChange={(value) =>
+								updateCaption({ highlightEffect: value as NonNullable<TextElement["caption"]>["highlightEffect"] })
+							}
+						>
+							<SelectTrigger>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="color">Color</SelectItem>
+								<SelectItem value="scale">Scale</SelectItem>
+								<SelectItem value="background">Background</SelectItem>
+								<SelectItem value="glow">Glow</SelectItem>
+								<SelectItem value="underline">Underline</SelectItem>
+							</SelectContent>
+						</Select>
+					</SectionField>
+					<SectionField label="Highlight Color">
+						<ColorPicker
+							value={uppercase({
+								string: (element.caption?.highlightColor ?? "FFFF00").replace("#", ""),
+							})}
+							onChange={(color) =>
+								updateCaption({ highlightColor: `#${color}` })
+							}
+							onChangeEnd={() => {}}
+						/>
+					</SectionField>
+				</SectionFields>
+			</SectionContent>
 		</Section>
 	);
 }

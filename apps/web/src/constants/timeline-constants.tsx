@@ -7,7 +7,7 @@ import {
 	TextIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { OcVideoIcon } from "@gracecut/ui/icons";
+import { Video } from "lucide-react";
 
 export const DEFAULT_TRANSFORM: Transform = {
 	scale: 1,
@@ -55,6 +55,8 @@ export const TIMELINE_CONSTANTS = {
 	ZOOM_ANCHOR_PLAYHEAD_THRESHOLD: 0.15,
 } as const;
 
+import type { ReactNode } from "react";
+
 export const DEFAULT_TIMELINE_VIEW_STATE: TTimelineViewState = {
 	zoomLevel: 1,
 	scrollLeft: 0,
@@ -62,23 +64,8 @@ export const DEFAULT_TIMELINE_VIEW_STATE: TTimelineViewState = {
 };
 
 export const TRACK_ICONS: Record<TrackType, React.ReactNode> = {
-	video: <OcVideoIcon className="text-muted-foreground size-4 shrink-0" />,
-	text: (
-		<HugeiconsIcon
-			icon={TextIcon}
-			className="text-muted-foreground size-4 shrink-0"
-		/>
-	),
-	audio: (
-		<HugeiconsIcon
-			icon={MusicNote03Icon}
-			className="text-muted-foreground size-4 shrink-0"
-		/>
-	),
-	sticker: (
-		<HugeiconsIcon
-			icon={Happy01Icon}
-			className="text-muted-foreground size-4 shrink-0"
-		/>
-	),
+	video: <Video className="text-muted-foreground size-4 shrink-0" />,
+	text: <HugeiconsIcon icon={TextIcon} className="text-muted-foreground size-4 shrink-0" />,
+	audio: <HugeiconsIcon icon={MusicNote03Icon} className="text-muted-foreground size-4 shrink-0" />,
+	sticker: <HugeiconsIcon icon={Happy01Icon} className="text-muted-foreground size-4 shrink-0" />,
 } as const;

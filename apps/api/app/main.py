@@ -4,10 +4,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import health, auth, ai_chat, ai_music, ai_voice, ai_stock, ai_render_motion
+from app.routers import health, auth, ai_chat, ai_music, ai_stock, ai_voice
 from app.routers import ai_sessions, sounds
 from app.routers import projects, media, render, ai_video, auto_edit, collaboration
 from app.routers import agent as agent_router
+from app.routers import transcription
 
 
 @asynccontextmanager
@@ -41,9 +42,8 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(ai_chat.router)
 app.include_router(ai_music.router)
-app.include_router(ai_voice.router)
 app.include_router(ai_stock.router)
-app.include_router(ai_render_motion.router)
+app.include_router(ai_voice.router)
 app.include_router(ai_sessions.router)
 app.include_router(sounds.router)
 
@@ -54,6 +54,9 @@ app.include_router(render.router)
 app.include_router(ai_video.router)
 app.include_router(auto_edit.router)
 app.include_router(collaboration.router)
+
+# --- transcription ---
+app.include_router(transcription.router)
 
 # --- agentic pipeline ---
 app.include_router(agent_router.router)

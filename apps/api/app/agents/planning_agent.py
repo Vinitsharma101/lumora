@@ -31,7 +31,7 @@ Output ONLY valid JSON with this structure:
       "description": "Establishing wide shot of the location",
       "duration": 5,
       "visual_type": "text_to_video",
-      "prompt": "Extremely detailed generation prompt describing exactly what should appear, the visual style, colors, mood, camera angle, and lighting",
+      "prompt": "Extremely detailed generation prompt describing exactly what should appear, the visual style, colors, mood, camera angle, and lighting. If visual_type is stock_video, this should be a concise search query (e.g. 'city skyline aerial sunset').",
       "camera": {
         "angle": "wide_shot",
         "movement": "slow_dolly_forward",
@@ -107,6 +107,7 @@ SHOT PLANNING RULES:
 - Insert shots and close-ups for emotional emphasis
 - Each shot prompt must be extremely detailed for AI video generation
 - Shots within the same scene share location/lighting/characters for coherence
+- Use "visual_type": "stock_video" or "stock_image" for generic b-roll or establishing shots where AI generation is unnecessary to save time and cost.
 - Duration of all shots should sum to the scene's estimated_duration_seconds
 - For dialog: create one shot per line, with the speaker as character_focus
 - Voiceover text must contain ONLY the spoken words, not stage directions
@@ -162,8 +163,15 @@ Show Bible / Global Rules:
 Character Profiles:
 {json.dumps(state.get('character_profiles', {}), indent=2)}
 
+Canvas Dimensions:
+- Width: {state.get('clarified_context', {}).get('canvas_width', 1920)}px
+- Height: {state.get('clarified_context', {}).get('canvas_height', 1080)}px
+- FPS: {state.get('clarified_context', {}).get('fps', 30)}
+- Aspect Ratio: {state.get('clarified_context', {}).get('canvas_width', 1920)}:{state.get('clarified_context', {}).get('canvas_height', 1080)}
+
 Duration should match the estimated_duration_seconds from the scene or default to 15s.
 Break this scene into 2-5 shots with detailed generation prompts.
+All generated images/videos should match the canvas aspect ratio.
 """
             }]
         )

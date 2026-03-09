@@ -8,8 +8,8 @@ from app.ai.providers.types import AIMessage, ToolDefinition
 class ChatRequest(BaseModel):
     provider: Literal["claude", "openai", "gemini"]
     messages: list[AIMessage]
-    tools: list[ToolDefinition]
-    systemPrompt: str
+    tools: list[ToolDefinition] | None = None
+    systemPrompt: str | None = None
 
 
 class MusicRequest(BaseModel):
@@ -26,7 +26,7 @@ class VoiceRequest(BaseModel):
 
 class StockDownloadRequest(BaseModel):
     url: str
-    type: Literal["video", "image"]
+    type: Literal["video", "image", "photo"]
     source: Literal["pexels", "pixabay"]
 
 

@@ -136,20 +136,23 @@ export async function executeToolCall(
 					startTime: number;
 					duration: number;
 				}>;
-				const sharedFontSize = (args.fontSize as number) ?? 14;
+				const sharedFontSize = (args.fontSize as number) ?? 15;
+				const sharedFontFamily = (args.fontFamily as string) ?? "Inter";
 				const sharedColor = (args.color as string) ?? "#ffffff";
-				const sharedBg = (args.backgroundColor as string) ?? "#000000";
+				const sharedBg = (args.backgroundColor as string) ?? "transparent";
 				const sharedPosY = (args.positionY as number) ?? 0.35;
+				const animationType = (args.animation as string) ?? "none";
 
 				// Build all elements first, then insert as a single atomic batch
 				// so that Cmd+Z removes all captions in one undo step.
-				const items = captions.map((cap) => ({
-					element: buildTextElement({
+				const items = captions.map((cap) => {
+					const element = buildTextElement({
 						raw: {
 							name: cap.content.slice(0, 30),
 							content: cap.content,
 							duration: cap.duration,
 							fontSize: sharedFontSize,
+							fontFamily: sharedFontFamily,
 							color: sharedColor,
 							background: {
 								color: sharedBg === "transparent" ? "#00000000" : sharedBg,
@@ -158,9 +161,24 @@ export async function executeToolCall(
 							transform: { scale: 1, position: { x: 0, y: sharedPosY }, rotate: 0 },
 						},
 						startTime: cap.startTime,
-					}),
-					placement: { mode: "auto" } as const,
-				}));
+					});
+
+					if (animationType === "pop_in") {
+						element.transitions = [
+							{
+								id: crypto.randomUUID(),
+								type: "scale_up",
+								duration: 0.2,
+								direction: "in"
+							}
+						];
+					}
+
+					return {
+						element,
+						placement: { mode: "auto" } as const,
+					};
+				});
 
 				editor.timeline.insertElements(items);
 
@@ -303,22 +321,60 @@ export async function executeToolCall(
 				const startTime = (args.startTime as number) ?? 0;
 				const voiceId = args.voiceId as string | undefined;
 
-				const response = await apiFetch("/api/ai/voice", {
+				const response = await apiFetch("/api/ai/voice/tts", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ text, voiceId }),
+					body: JSON.stringify({ text, voice_id: voiceId }),
 				});
 
 				if (!response.ok) {
-					const err = await response.json();
+					const err = await response.json().catch(() => ({}));
 					return {
 						success: false,
-						result: `Voice generation failed: ${err.error || "Unknown error"}`,
+						result: `Voice generation failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
 						description: "Generating voiceover",
 					};
 				}
 
-				const blob = await response.blob();
+				const jobData = await response.json();
+				const jobId = jobData.job_id;
+
+				// Poll for completion
+				let completedJob = null;
+				for (let i = 0; i < 60; i++) {
+					await new Promise((resolve) => setTimeout(resolve, 2000));
+					const statusRes = await apiFetch(`/api/ai/jobs/${jobId}`);
+					if (!statusRes.ok) continue;
+					
+					const statusData = await statusRes.json();
+					if (statusData.status === "completed") {
+						completedJob = statusData;
+						break;
+					} else if (statusData.status === "failed") {
+						return {
+							success: false,
+							result: `Voice generation failed: ${statusData.error || "Unknown error"}`,
+							description: "Generating voiceover",
+						};
+					}
+				}
+
+				if (!completedJob || !completedJob.result?.audio_base64) {
+					return {
+						success: false,
+						result: "Voice generation timed out.",
+						description: "Generating voiceover",
+					};
+				}
+
+				// Decode the base64 result
+				const byteCharacters = atob(completedJob.result.audio_base64);
+				const byteNumbers = new Array(byteCharacters.length);
+				for (let i = 0; i < byteCharacters.length; i++) {
+					byteNumbers[i] = byteCharacters.charCodeAt(i);
+				}
+				const byteArray = new Uint8Array(byteNumbers);
+				const blob = new Blob([byteArray], { type: "audio/mpeg" });
 				const file = new File([blob], `voiceover-${Date.now()}.mp3`, {
 					type: "audio/mpeg",
 				});
@@ -384,15 +440,47 @@ export async function executeToolCall(
 				});
 
 				if (!response.ok) {
-					const err = await response.json();
+					const err = await response.json().catch(() => ({}));
 					return {
 						success: false,
-						result: `Music generation failed: ${err.error || "Unknown error"}`,
+						result: `Music generation failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
 						description: "Generating music",
 					};
 				}
 
-				const blob = await response.blob();
+				const jobData = await response.json();
+				const jobId = jobData.job_id;
+
+				// Poll for completion
+				let completedJob = null;
+				for (let i = 0; i < 60; i++) {
+					await new Promise((resolve) => setTimeout(resolve, 3000));
+					const statusRes = await apiFetch(`/api/ai/jobs/${jobId}`);
+					if (!statusRes.ok) continue;
+					
+					const statusData = await statusRes.json();
+					if (statusData.status === "completed") {
+						completedJob = statusData;
+						break;
+					} else if (statusData.status === "failed") {
+						return {
+							success: false,
+							result: `Music generation failed: ${statusData.error || "Unknown error"}`,
+							description: "Generating music",
+						};
+					}
+				}
+
+				if (!completedJob || !completedJob.result?.audio_url) {
+					return {
+						success: false,
+						result: "Music generation timed out.",
+						description: "Generating music",
+					};
+				}
+
+				const audioRes = await fetch(completedJob.result.audio_url);
+				const blob = await audioRes.blob();
 				const file = new File([blob], `music-${Date.now()}.mp3`, {
 					type: "audio/mpeg",
 				});
@@ -479,6 +567,7 @@ export async function executeToolCall(
 				const duration = (args.duration as number) ?? 5;
 				const name = (args.name as string) ?? "Stock media";
 				const source = args.source as string;
+
 
 				const response = await apiFetch("/api/ai/stock/download", {
 					method: "POST",
@@ -875,13 +964,225 @@ export async function executeToolCall(
 				};
 			}
 
+			// ── Stock Music Search ──
+			case "search_stock_music": {
+				const query = args.query as string;
+				const params = new URLSearchParams({ query, type: "music" });
+
+				const response = await apiFetch(
+					`/api/sounds/search?${params.toString()}`,
+				);
+				if (!response.ok) {
+					return {
+						success: false,
+						result: "Stock music search failed",
+						description: "Searching for stock music",
+					};
+				}
+
+				const results = await response.json();
+				return {
+					success: true,
+					result: JSON.stringify(results, null, 2),
+					description: `Searching for "${query}" stock music`,
+				};
+			}
+
+			// ── Visual Feedback Loop ──
+			case "sample_timeline_frames": {
+				const count = Math.min((args.count as number) ?? 4, 8);
+				const project = editor.project.getActive();
+				const scene = editor.scenes.getActiveScene();
+
+				if (!scene || !project) {
+					return {
+						success: false,
+						result: "No active scene or project",
+						description: "Sampling timeline frames",
+					};
+				}
+
+				let maxDuration = 0;
+				for (const track of scene.tracks) {
+					for (const el of track.elements) {
+						const end = el.startTime + el.duration;
+						if (end > maxDuration) maxDuration = end;
+					}
+				}
+
+				if (maxDuration === 0) {
+					return {
+						success: false,
+						result: "Timeline is empty, no frames to sample",
+						description: "Sampling timeline frames",
+					};
+				}
+
+				const sampleStart = (args.startTime as number) ?? 0;
+				const sampleEnd = (args.endTime as number) ?? maxDuration;
+				const sampleInterval =
+					count > 1 ? (sampleEnd - sampleStart) / (count - 1) : 0;
+
+				// Sample what's visible at each time point
+				const frameSamples: Array<{
+					time: number;
+					visibleElements: Array<{
+						name: string;
+						type: string;
+						content?: string;
+					}>;
+				}> = [];
+
+				for (let i = 0; i < count; i++) {
+					const time = sampleStart + sampleInterval * i;
+					const visibleElements: Array<{
+						name: string;
+						type: string;
+						content?: string;
+					}> = [];
+
+					for (const track of scene.tracks) {
+						for (const el of track.elements) {
+							if (
+								time >= el.startTime &&
+								time < el.startTime + el.duration
+							) {
+								const entry: {
+									name: string;
+									type: string;
+									content?: string;
+								} = { name: el.name, type: el.type };
+								if (el.type === "text") {
+									entry.content = el.content;
+								}
+								visibleElements.push(entry);
+							}
+						}
+					}
+
+					frameSamples.push({
+						time: Math.round(time * 100) / 100,
+						visibleElements,
+					});
+				}
+
+				return {
+					success: true,
+					result: JSON.stringify(
+						{
+							frameCount: frameSamples.length,
+							canvasSize: `${project.settings.canvasSize.width}x${project.settings.canvasSize.height}`,
+							frames: frameSamples,
+						},
+						null,
+						2,
+					),
+					description: `Sampled ${frameSamples.length} frames from timeline`,
+				};
+			}
+
+			case "review_composition": {
+				const goal = args.goal as string;
+				const project = editor.project.getActive();
+				const scene = editor.scenes.getActiveScene();
+
+				if (!scene || !project) {
+					return {
+						success: false,
+						result: "No active scene or project",
+						description: "Reviewing composition",
+					};
+				}
+
+				let maxDuration = 0;
+				for (const track of scene.tracks) {
+					for (const el of track.elements) {
+						const end = el.startTime + el.duration;
+						if (end > maxDuration) maxDuration = end;
+					}
+				}
+
+				if (maxDuration === 0) {
+					return {
+						success: true,
+						result: JSON.stringify({
+							approved: false,
+							issues: ["Timeline is empty"],
+							suggestion: "Add content before reviewing",
+						}),
+						description: "Reviewing composition",
+					};
+				}
+
+				// Build review context from timeline state
+				const ctx = serializeEditorContext(editor);
+				const trackSummary = ctx.tracks
+					.map(
+						(t) =>
+							`${t.name} (${t.type}): ${t.elements?.length ?? 0} elements`,
+					)
+					.join(", ");
+
+				const reviewResult = {
+					approved: true,
+					goal,
+					canvasSize: `${ctx.canvas.width}x${ctx.canvas.height}`,
+					duration: maxDuration,
+					trackSummary,
+					issues: [] as string[],
+					suggestions: [] as string[],
+				};
+
+				// Basic automated checks
+				for (const track of ctx.tracks) {
+					if (!track.elements) continue;
+					for (const el of track.elements) {
+						if (el.type === "text" && el.duration < 1) {
+							reviewResult.issues.push(
+								`Text "${el.content?.slice(0, 20)}" at ${el.startTime}s has very short duration (${el.duration}s)`,
+							);
+							reviewResult.approved = false;
+						}
+						if (el.startTime < 0) {
+							reviewResult.issues.push(
+								`Element "${el.name}" has negative start time`,
+							);
+							reviewResult.approved = false;
+						}
+					}
+				}
+
+				if (reviewResult.issues.length === 0) {
+					reviewResult.suggestions.push(
+						"Composition looks good based on timeline analysis",
+					);
+				}
+
+				return {
+					success: true,
+					result: JSON.stringify(reviewResult, null, 2),
+					description: `Composition review: ${reviewResult.approved ? "approved" : `${reviewResult.issues.length} issue(s) found`}`,
+				};
+			}
+
 				// ── Autonomous Agent Pipeline ──
 			case "start_agent_session": {
 				const query = args.query as string;
-				const context = (args.context as Record<string, unknown>) ?? {};
+				let context = (args.context as Record<string, unknown>) ?? {};
 				const mediaAssetIds = (args.mediaAssetIds as string[]) ?? [];
 
-				const projectId = editor.project.getActive()?.metadata.id;
+				const project = editor.project.getActive();
+				const projectId = project?.metadata.id;
+
+				if (project) {
+					context = {
+						...context,
+						canvas_width: project.settings.canvasSize?.width ?? 1920,
+						canvas_height: project.settings.canvasSize?.height ?? 1080,
+						fps: project.settings.fps ?? 30,
+						requested_duration: project.metadata.duration ?? 60,
+					};
+				}
 
 				const response = await apiFetch(`/api/agent/execute/${projectId || "default"}`, {
 					method: "POST",
@@ -952,11 +1253,40 @@ export async function executeToolCall(
 					};
 				}
 
-				const statusData = await response.json();
+				const statusData = (await response.json()) as Record<string, unknown>;
+
+				// When completed, offer to hydrate the timeline
+				if (
+					statusData.status === "completed" &&
+					statusData.assembled_timeline
+				) {
+					const timeline = statusData.assembled_timeline as Record<
+						string,
+						unknown
+					>;
+					const tracks = timeline.tracks as
+						| Record<string, Array<Record<string, unknown>>>
+						| undefined;
+
+					if (tracks) {
+						let totalElements = 0;
+						for (const trackType of Object.keys(tracks)) {
+							totalElements += (tracks[trackType] || []).length;
+						}
+						(statusData as Record<string, unknown>).timeline_summary = {
+							total_duration: timeline.total_duration,
+							fps: timeline.fps,
+							resolution: timeline.resolution,
+							total_elements: totalElements,
+							track_types: Object.keys(tracks),
+						};
+					}
+				}
+
 				return {
 					success: true,
 					result: JSON.stringify(statusData, null, 2),
-					description: `Agent status: ${(statusData as Record<string, string>).status}`,
+					description: `Agent status: ${statusData.status as string}`,
 				};
 			}
 

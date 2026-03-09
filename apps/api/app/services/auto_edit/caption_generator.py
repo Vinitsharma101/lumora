@@ -24,10 +24,13 @@ async def format_captions_with_llm(
     Returns list of caption objects for the timeline.
     """
     style_instructions = {
-        "default": "Create clean, readable captions. Group words into natural phrases of 4-8 words. Capitalize first word of each phrase.",
-        "viral": "Create viral-style captions: short punchy phrases (2-4 words), ALL CAPS for emphasis words, add emoji where appropriate. Each word should have individual timing for word-by-word animation.",
-        "karaoke": "Create karaoke-style captions: each word gets individual timing for highlighting. Group into lines of 4-6 words.",
-        "minimal": "Create minimal captions: short clean text, lowercase, no punctuation, 3-5 words per caption.",
+        "default": "Create clean, readable captions. Group words into natural phrases of 4-8 words. Capitalize first word of each phrase. Set fontFamily to 'Inter', color to '#FFFFFF'.",
+        "viral": "Create viral-style captions: short punchy phrases (1-3 words max). ALL CAPS for emphasis words. Set fontFamily to 'Anton'. Use bright colors like '#FFFF00' (yellow) or '#00FF00' (green) for emphasis chunks, otherwise '#FFFFFF'. Each word should have individual timing for word-by-word animation.",
+        "viral_hormozi": "Create viral-style captions: short punchy phrases (1-3 words max). ALL CAPS for emphasis words. Set fontFamily to 'Anton'. Use bright colors like '#FFFF00' (yellow) or '#00FF00' (green) for emphasis chunks, otherwise '#FFFFFF'. Each word should have individual timing for word-by-word animation.",
+        "karaoke": "Create karaoke-style captions: display the full line but highlight one word at a time as it's spoken. Use word-level timing. Set fontFamily to 'Roboto'. Active word color '#FFFF00' (yellow), inactive words '#AAAAAA' (gray). Each word gets its own timing entry.",
+        "minimal": "Create minimal captions: short, clean text only. 3-5 words max per caption. No background, no styling effects. Set fontFamily to 'Inter', color to '#FFFFFF'. Simple and unobtrusive.",
+        "mrbeast_gaming": "Create high-energy gaming style captions: 2-4 words maximum. Set fontFamily to 'Bangers'. Set color to '#FFFFFF' and backgroundColor to '#000000' (with slight padding). Use dramatic ALL CAPS for action phrases.",
+        "cinematic": "Create cinematic subtitles: slow pacing, elegant, 5-8 words per line. Set fontFamily to 'Montserrat', color to '#FFFFFF', and backgroundColor to 'transparent'. NO ALL CAPS, rely on proper punctuation.",
     }
 
     prompt = f"""Convert these transcript segments into styled video captions.
@@ -45,6 +48,9 @@ Return ONLY valid JSON:
             "text": "caption text here",
             "start": 0.0,
             "end": 2.5,
+            "fontFamily": "Inter",
+            "color": "#FFFFFF",
+            "backgroundColor": "transparent",
             "words": [
                 {{"word": "caption", "start": 0.0, "end": 0.5}},
                 {{"word": "text", "start": 0.5, "end": 0.8}},
@@ -134,3 +140,51 @@ async def _format_with_claude(prompt: str) -> list[dict]:
     data = response.json()
     text = data["content"][0]["text"]
     return json.loads(text).get("captions", [])
+
+
+async def translate_captions(
+    captions: list[dict],
+    target_language: str,
+) -> list[dict]:
+    """Translate caption texts while preserving timing structure."""
+    prompt = f"""Translate these video captions to {target_language}.
+Keep the exact same JSON structure. Only change the "text" and "words" (word text only).
+Preserve all timing values exactly as they are.
+
+Captions:
+{json.dumps(captions[:200], indent=2)}
+
+Return ONLY valid JSON:
+{{"captions": [...]}}"""
+
+    if settings.OPENAI_API_KEY:
+        return await _format_with_openai(prompt)
+    if settings.GOOGLE_AI_API_KEY:
+        return await _format_with_gemini(prompt)
+    if settings.ANTHROPIC_API_KEY:
+        return await _format_with_claude(prompt)
+    return captions
+
+
+async def add_emojis_to_captions(
+    captions: list[dict],
+) -> list[dict]:
+    """Add contextual emojis to caption texts."""
+    prompt = f"""Add relevant emojis to these video captions.
+Insert 1-2 emojis per caption that match the content/emotion.
+Place emojis at the end of the text or between phrases where natural.
+Keep all timing and structure identical. Only modify the "text" field.
+
+Captions:
+{json.dumps(captions[:200], indent=2)}
+
+Return ONLY valid JSON:
+{{"captions": [...]}}"""
+
+    if settings.OPENAI_API_KEY:
+        return await _format_with_openai(prompt)
+    if settings.GOOGLE_AI_API_KEY:
+        return await _format_with_gemini(prompt)
+    if settings.ANTHROPIC_API_KEY:
+        return await _format_with_claude(prompt)
+    return captions

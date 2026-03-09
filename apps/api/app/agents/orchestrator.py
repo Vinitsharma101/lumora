@@ -37,7 +37,47 @@ class AgentOrchestrator:
     async def start(self, query: str, context: dict, media_assets: list) -> str:
         """Start the agentic pipeline, save to DB, and enqueue ARQ job."""
         self.session_id = str(uuid.uuid4())
-        
+
+        # Pre-analyze uploaded media assets with Claude Vision
+        media_analysis = []
+        if media_assets:
+            from app.config import settings as app_settings
+            if app_settings.ANTHROPIC_API_KEY:
+                from anthropic import AsyncAnthropic
+                from app.http_client import get_http_client
+                import base64
+
+                client = AsyncAnthropic(api_key=app_settings.ANTHROPIC_API_KEY)
+                http_client = await get_http_client()
+
+                for asset in media_assets[:3]:
+                    asset_url = asset if isinstance(asset, str) else asset.get("url", "")
+                    if not asset_url:
+                        continue
+                    try:
+                        resp = await http_client.get(asset_url)
+                        if resp.status_code == 200:
+                            ct = resp.headers.get("content-type", "")
+                            if ct.startswith("image"):
+                                img_b64 = base64.b64encode(resp.content).decode("utf-8")
+                                vision_resp = await client.messages.create(
+                                    model="claude-sonnet-4-20250514",
+                                    max_tokens=512,
+                                    messages=[{
+                                        "role": "user",
+                                        "content": [
+                                            {"type": "image", "source": {"type": "base64", "media_type": ct, "data": img_b64}},
+                                            {"type": "text", "text": "Describe this image briefly: scene, mood, colors, subjects, and any text. Output as JSON: {\"description\": \"...\", \"mood\": \"...\", \"colors\": [...]}"},
+                                        ],
+                                    }],
+                                )
+                                media_analysis.append({"url": asset_url, "type": "image", "analysis": vision_resp.content[0].text})
+                    except Exception as e:
+                        logger.warning(f"Pre-analysis failed for {asset_url}: {e}")
+
+            if media_analysis:
+                context["media_analysis"] = media_analysis
+
         self.state = AgentState(
             project_id=self.project_id,
             user_id=self.user_id,
@@ -46,7 +86,10 @@ class AgentOrchestrator:
             pending_questions=[],
             answered_questions={},
             scene_plan={},
-            character_profiles={},
+            character_profiles={
+                "_canvas_width": context.get("canvas_width", 1920),
+                "_canvas_height": context.get("canvas_height", 1080),
+            },
             generated_assets=[],
             timeline_plan={},
             assembled_timeline={},

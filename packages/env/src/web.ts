@@ -38,8 +38,6 @@ const webEnvSchema = z.object({
 
 	// External AI services (moved to FastAPI, kept optional for backwards compat)
 	ELEVENLABS_API_KEY: z.string().optional(),
-	SUNO_API_KEY: z.string().optional(),
-	SUNO_API_URL: z.string().url().optional(),
 	PEXELS_API_KEY: z.string().optional(),
 	PIXABAY_API_KEY: z.string().optional(),
 });

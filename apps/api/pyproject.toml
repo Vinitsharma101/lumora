@@ -28,6 +28,7 @@ dependencies = [
     "pinecone>=5.0.0",
     # WebSocket collaboration
     "websockets>=12.0",
+    "python-multipart>=0.0.9",
     # Google Cloud AI
     "google-cloud-aiplatform>=1.40.0",
 ]

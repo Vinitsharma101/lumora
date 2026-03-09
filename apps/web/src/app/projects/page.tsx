@@ -44,7 +44,7 @@ import {
 	ArrowDown02Icon,
 	InformationCircleIcon,
 } from "@hugeicons/core-free-icons";
-import { OcVideoIcon } from "@gracecut/ui/icons";
+import { Video } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import {
 	ContextMenu,
@@ -591,7 +591,7 @@ function ProjectItem({
 						/>
 					) : (
 						<div className="flex size-full items-center justify-center">
-							<OcVideoIcon className="text-muted-foreground size-12 shrink-0" />
+							<Video className="text-muted-foreground size-12 shrink-0" />
 						</div>
 					)}
 				</div>
@@ -627,7 +627,7 @@ function ProjectItem({
 					/>
 				) : (
 					<div className="flex size-full items-center justify-center">
-						<OcVideoIcon className="text-muted-foreground size-5 shrink-0" />
+						<Video className="text-muted-foreground size-5 shrink-0" />
 					</div>
 				)}
 			</div>

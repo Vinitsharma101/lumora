@@ -5,6 +5,10 @@ import sys
 # Mocking settings before importing worker to avoid Redis connection errors on import
 os.environ["REDIS_URL"] = "redis://mock:6379"
 os.environ["DATABASE_URL"] = "postgresql+asyncpg://mock:mock@mock:5432/mock"
+os.environ["SUPABASE_URL"] = "http://mock"
+os.environ["SUPABASE_SERVICE_KEY"] = "mock"
+os.environ["SUPABASE_ANON_KEY"] = "mock"
+os.environ["ANTHROPIC_API_KEY"] = "mock"
 
 # Mock the ARQ Redis Pool
 class MockPool:
@@ -40,18 +44,25 @@ class MockDBSession:
                         self.user_id = "test_user"
                         self.status = "running"
                         self.query = "Make an action movie"
+                        self.raw_video_url = "s3://mock/video.mp4"
+                        self.chunk_metadata = []
+                        self.video_map = {}
+                        self.audio_map = {}
                         self.plan = [{"scene_number": 1, "description": "Intro"}]
                         self.pending_questions = []
                         self.answered_questions = {}
                         self.generated_assets = []
                         self.assembled_timeline = {}
                         self.review_notes = []
+                        self.review_notes = []
                         self.messages = []
                         self.error = None
+                    def __getattr__(self, name):
+                        return None
                 return MockAgentSession()
         return MockResult()
 
-async def mock_async_session_factory():
+def mock_async_session_factory():
     return MockDBSession()
 
 def mock_get_arq_pool():
@@ -133,7 +144,7 @@ async def test_end_to_end_flow():
     result = await process_movie_consistency(ctx, session_id)
     print(f"Consistency result: {result}")
     assert result["status"] == "consistency_complete"
-    assert pool.jobs[0][0] == "process_movie_assembly"
+    assert pool.jobs[0][0] == "process_movie_review"
     print("✅ Consistency successfully checked and enqueued 'process_movie_assembly'!\n")
 
     print("🎉 Pipeline flow verification successful!")

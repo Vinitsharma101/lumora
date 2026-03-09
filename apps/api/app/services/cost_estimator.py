@@ -20,7 +20,7 @@ COST_PER_CALL = {
     "replicate_upscale": 0.15,
     "elevenlabs_tts_per_1k_chars": 0.30,
     "elevenlabs_sfx": 0.15,
-    "suno_music": 0.10,
+    "replicate_musicgen": 0.05,
     "claude_api_per_call": 0.05,
 }
 
@@ -61,7 +61,7 @@ def estimate_pipeline_cost(state: dict) -> dict:
     video_gen_cost = total_shots * COST_PER_CALL["replicate_video_gen"]
     character_ref_cost = num_characters * 4 * COST_PER_CALL["replicate_image_gen"]  # 4 angles per character
     tts_cost = (total_dialog_chars / 1000) * COST_PER_CALL["elevenlabs_tts_per_1k_chars"]
-    music_cost = COST_PER_CALL["suno_music"] * max(1, num_scenes // 5)  # ~1 track per 5 scenes
+    music_cost = COST_PER_CALL["replicate_musicgen"] * max(1, num_scenes // 5)  # ~1 track per 5 scenes
     sfx_cost = num_scenes * 0.5 * COST_PER_CALL["elevenlabs_sfx"]  # ~0.5 SFX per scene
     llm_cost = (num_scenes + 3) * COST_PER_CALL["claude_api_per_call"]  # planning + director + review
     lip_sync_cost = total_dialog_lines * COST_PER_CALL["replicate_lip_sync"] * 0.3  # only some need lip sync

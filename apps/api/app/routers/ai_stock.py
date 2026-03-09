@@ -178,6 +178,7 @@ async def download_stock(body: StockDownloadRequest, request: Request):
     if response.status_code != 200:
         return JSONResponse({"error": "Failed to download media"}, status_code=502)
 
+    # Normalize: "photo" and "image" both map to image/jpeg
     content_type = "video/mp4" if body.type == "video" else "image/jpeg"
     return Response(
         content=response.content,

@@ -12,6 +12,7 @@ import {
 	getTextBackgroundRect,
 	measureTextBlock,
 } from "@/lib/text/layout";
+import { getAnimationForWord } from "@/lib/text/animations";
 
 function scaleFontSize({
 	fontSize,
@@ -77,6 +78,123 @@ export class TextNode extends BaseNode<TextNodeParams> {
 			time >= this.params.startTime &&
 			time < this.params.startTime + this.params.duration
 		);
+	}
+
+	private renderKaraoke({
+		renderer,
+		time,
+		scaledFontSize,
+		lineHeightPx,
+		block,
+	}: {
+		renderer: CanvasRenderer;
+		time: number;
+		scaledFontSize: number;
+		lineHeightPx: number;
+		block: { visualCenterOffset: number };
+	}) {
+		const caption = this.params.caption;
+		if (!caption?.wordTimings) return;
+
+		const relativeTime = time - this.params.startTime;
+		const animationType = caption.animationType ?? "karaoke";
+		const highlightEffect = caption.highlightEffect ?? "color";
+		const highlightColor = caption.highlightColor ?? "#FFFF00";
+		const baseColor = this.params.color;
+
+		let xOffset = 0;
+		const spaceWidth = renderer.context.measureText(" ").width;
+
+		const totalWidth = caption.wordTimings.reduce((sum, wt, index) => {
+			const wordWidth = renderer.context.measureText(wt.word).width;
+			return sum + wordWidth + (index < caption.wordTimings!.length - 1 ? spaceWidth : 0);
+		}, 0);
+
+		if (this.params.textAlign === "center") {
+			xOffset = -totalWidth / 2;
+		} else if (this.params.textAlign === "right") {
+			xOffset = -totalWidth;
+		}
+
+		const lineY = -block.visualCenterOffset;
+
+		for (let i = 0; i < caption.wordTimings.length; i++) {
+			const wt = caption.wordTimings[i];
+			const wordWidth = renderer.context.measureText(wt.word).width;
+			const isActive = relativeTime >= wt.start && relativeTime < wt.end;
+			const isPast = relativeTime >= wt.end;
+
+			const animation = getAnimationForWord({
+				animationType,
+				relativeTime,
+				wordIndex: i,
+				wordStart: wt.start,
+				wordEnd: wt.end,
+			});
+
+			if (animation.opacity <= 0) {
+				xOffset += wordWidth + spaceWidth;
+				continue;
+			}
+
+			renderer.context.save();
+			renderer.context.globalAlpha = this.params.opacity * animation.opacity;
+
+			if (animation.scale !== 1) {
+				const wordCenterX = xOffset + wordWidth / 2;
+				renderer.context.translate(wordCenterX, lineY + animation.offsetY);
+				renderer.context.scale(animation.scale, animation.scale);
+				renderer.context.translate(-wordCenterX, -(lineY + animation.offsetY));
+			}
+
+			const drawY = lineY + animation.offsetY;
+
+			if (isActive && highlightEffect === "background" && caption.highlightBackground) {
+				renderer.context.fillStyle = caption.highlightBackground;
+				const padding = 4;
+				renderer.context.beginPath();
+				renderer.context.roundRect(
+					xOffset - padding,
+					drawY - scaledFontSize * 0.8,
+					wordWidth + padding * 2,
+					scaledFontSize * 1.2,
+					4,
+				);
+				renderer.context.fill();
+			}
+
+			if (isActive || (highlightEffect === "color" && isPast)) {
+				renderer.context.fillStyle = isActive ? highlightColor : baseColor;
+			} else {
+				renderer.context.fillStyle = baseColor;
+			}
+			if (isActive && highlightEffect === "color") {
+				renderer.context.fillStyle = highlightColor;
+			}
+
+			if (isActive && highlightEffect === "glow") {
+				renderer.context.shadowColor = highlightColor;
+				renderer.context.shadowBlur = 15;
+			}
+
+			if (this.params.stroke) {
+				renderer.context.strokeStyle = this.params.stroke.color;
+				renderer.context.lineWidth = this.params.stroke.width;
+				renderer.context.lineJoin = "round";
+				renderer.context.strokeText(wt.word, xOffset, drawY);
+			}
+
+			renderer.context.fillText(wt.word, xOffset, drawY);
+
+			if (isActive && highlightEffect === "underline") {
+				const underlineY = drawY + scaledFontSize * 0.15;
+				renderer.context.fillStyle = highlightColor;
+				renderer.context.fillRect(xOffset, underlineY, wordWidth, scaledFontSize * 0.07);
+			}
+
+			renderer.context.restore();
+			xOffset += wordWidth + spaceWidth;
+		}
 	}
 
 	async render({ renderer, time }: { renderer: CanvasRenderer; time: number }) {
@@ -167,19 +285,49 @@ export class TextNode extends BaseNode<TextNodeParams> {
 			}
 		}
 
-		for (let i = 0; i < lineCount; i++) {
-			const y = i * lineHeightPx - block.visualCenterOffset;
-			renderer.context.fillText(lines[i], 0, y);
-			drawTextDecoration({
-				ctx: renderer.context,
-				textDecoration: this.params.textDecoration ?? "none",
-				lineWidth: lineMetrics[i].width,
-				lineY: y,
-				metrics: lineMetrics[i],
-				scaledFontSize,
-				textAlign: this.params.textAlign,
-			});
+		if (this.params.shadow) {
+			renderer.context.shadowColor = this.params.shadow.color;
+			renderer.context.shadowBlur = this.params.shadow.blur;
+			renderer.context.shadowOffsetX = this.params.shadow.offsetX;
+			renderer.context.shadowOffsetY = this.params.shadow.offsetY;
 		}
+
+		const hasKaraoke =
+			this.params.caption?.wordTimings &&
+			this.params.caption.wordTimings.length > 0 &&
+			this.params.caption.animationType &&
+			this.params.caption.animationType !== "none";
+
+		if (hasKaraoke) {
+			this.renderKaraoke({ renderer, time, scaledFontSize, lineHeightPx, block });
+		} else {
+			for (let i = 0; i < lineCount; i++) {
+				const lineY = i * lineHeightPx - block.visualCenterOffset;
+
+				if (this.params.stroke) {
+					renderer.context.strokeStyle = this.params.stroke.color;
+					renderer.context.lineWidth = this.params.stroke.width;
+					renderer.context.lineJoin = "round";
+					renderer.context.strokeText(lines[i], 0, lineY);
+				}
+
+				renderer.context.fillText(lines[i], 0, lineY);
+				drawTextDecoration({
+					ctx: renderer.context,
+					textDecoration: this.params.textDecoration ?? "none",
+					lineWidth: lineMetrics[i].width,
+					lineY,
+					metrics: lineMetrics[i],
+					scaledFontSize,
+					textAlign: this.params.textAlign,
+				});
+			}
+		}
+
+		renderer.context.shadowColor = "transparent";
+		renderer.context.shadowBlur = 0;
+		renderer.context.shadowOffsetX = 0;
+		renderer.context.shadowOffsetY = 0;
 
 		renderer.context.globalAlpha = prevAlpha;
 		renderer.context.restore();

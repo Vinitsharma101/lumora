@@ -73,12 +73,13 @@ export class ProjectManager {
 		await this.storageMigrationPromise;
 	}
 
-	async createNewProject({ name }: { name: string }): Promise<string> {
+	async createNewProject({ name, type = "video" }: { name: string; type?: "image" | "video" }): Promise<string> {
 		const mainScene = buildDefaultScene({ name: "Main scene", isMain: true });
 		const newProject: TProject = {
 			metadata: {
 				id: generateUUID(),
 				name,
+				type,
 				duration: getProjectDurationFromScenes({ scenes: [mainScene] }),
 				createdAt: new Date(),
 				updatedAt: new Date(),

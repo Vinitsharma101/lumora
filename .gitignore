@@ -16,6 +16,11 @@ bun.lockb
 # Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Temp / scratch files
+test_connections.py
 
 # TypeScript
 *.tsbuildinfo

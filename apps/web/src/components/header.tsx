@@ -18,8 +18,16 @@ export function Header() {
 
 	const links = [
 		{
-			label: "Blog",
-			href: "/blog",
+			label: "Home",
+			href: "/home",
+		},
+		{
+			label: "Image",
+			href: "/home?mode=image",
+		},
+		{
+			label: "Video",
+			href: "/home?mode=video",
 		},
 	];
 
