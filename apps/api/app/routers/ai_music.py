@@ -1,93 +1,49 @@
-import asyncio
+import logging
 
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.http_client import get_http_client
+from app.auth import get_current_user
+from app.database import get_db
+from app.models import User
 from app.rate_limit import check_rate_limit
 from app.schemas.ai import MusicRequest
+from app.schemas.ai_video import AIJobResponse
+from app.services.auto_edit.pipeline import create_auto_edit_job as create_ai_job
+from app.worker import enqueue_ai_job
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ai"])
 
-MAX_POLL_ATTEMPTS = 60
-POLL_INTERVAL_SECONDS = 2
-
-
-@router.post("/api/ai/music")
-async def generate_music(body: MusicRequest, request: Request):
+@router.post("/api/ai/music", response_model=AIJobResponse)
+async def generate_music(
+    body: MusicRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate background music using AI asynchronously."""
     await check_rate_limit(request)
 
-    if not settings.SUNO_API_KEY or not settings.SUNO_API_URL:
-        return JSONResponse(
-            {"error": "Suno API not configured. Set SUNO_API_KEY and SUNO_API_URL."},
-            status_code=400,
-        )
-
-    client = await get_http_client()
-
-    # Start generation
-    generate_response = await client.post(
-        f"{settings.SUNO_API_URL}/api/generate",
-        headers={
-            "Authorization": f"Bearer {settings.SUNO_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="music_generation",
+        input_data={
             "prompt": body.prompt,
-            "make_instrumental": True,
-            "wait_audio": False,
+            "duration": body.duration,
+            "style": body.style,
         },
+        project_id=None,
+        provider="replicate",
     )
 
-    if generate_response.status_code != 200:
-        return JSONResponse(
-            {"error": f"Suno API error: {generate_response.text}"},
-            status_code=generate_response.status_code,
-        )
+    await enqueue_ai_job(job.id, "music_generation")
 
-    generate_data = generate_response.json()
-    song_ids = [item["id"] for item in generate_data]
-
-    if not song_ids:
-        return JSONResponse({"error": "No songs generated"}, status_code=500)
-
-    # Poll for completion
-    song_id = song_ids[0]
-    audio_url = None
-
-    for _ in range(MAX_POLL_ATTEMPTS):
-        await asyncio.sleep(POLL_INTERVAL_SECONDS)
-
-        status_response = await client.get(
-            f"{settings.SUNO_API_URL}/api/get",
-            params={"ids": song_id},
-            headers={"Authorization": f"Bearer {settings.SUNO_API_KEY}"},
-        )
-
-        if status_response.status_code != 200:
-            continue
-
-        status_data = status_response.json()
-        song = status_data[0] if status_data else None
-
-        if song and song.get("status") == "complete" and song.get("audio_url"):
-            audio_url = song["audio_url"]
-            break
-
-        if song and song.get("status") == "error":
-            return JSONResponse({"error": "Music generation failed"}, status_code=500)
-
-    if not audio_url:
-        return JSONResponse({"error": "Music generation timed out"}, status_code=504)
-
-    # Download the audio
-    audio_response = await client.get(audio_url)
-    if audio_response.status_code != 200:
-        return JSONResponse({"error": "Failed to download generated music"}, status_code=500)
-
-    return Response(
-        content=audio_response.content,
-        media_type="audio/mpeg",
-        headers={"Content-Length": str(len(audio_response.content))},
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
     )

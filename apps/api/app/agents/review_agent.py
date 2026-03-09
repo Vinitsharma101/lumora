@@ -8,6 +8,7 @@ import json
 import logging
 from anthropic import AsyncAnthropic
 from app.config import settings
+from app.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,50 @@ Evaluate quality and list any issues.
         approved = review.get("approved", True)
         issues = review.get("issues", [])
         score = review.get("score", 75)
+
+        # Visual verification: spot-check generated image assets with Claude Vision
+        if settings.ANTHROPIC_API_KEY and assets:
+            image_assets = [a for a in assets if a.get("image_url") and not a.get("error")][:2]
+            for asset in image_assets:
+                try:
+                    import base64
+                    client_http = await get_http_client()
+                    img_resp = await client_http.get(asset["image_url"])
+                    if img_resp.status_code == 200:
+                        img_b64 = base64.b64encode(img_resp.content).decode("utf-8")
+                        content_type = img_resp.headers.get("content-type", "image/jpeg")
+                        scene_id = asset.get("scene_id", "unknown")
+                        scene_desc = next(
+                            (s.get("description", "") for s in plan.get("scenes", []) if s.get("scene_id") == scene_id),
+                            "",
+                        )
+                        vision_resp = await self.client.messages.create(
+                            model="claude-sonnet-4-20250514",
+                            max_tokens=256,
+                            messages=[{
+                                "role": "user",
+                                "content": [
+                                    {"type": "image", "source": {"type": "base64", "media_type": content_type, "data": img_b64}},
+                                    {"type": "text", "text": f"Does this image match the intended scene description: '{scene_desc}'? Reply with a short JSON: {{\"matches\": true/false, \"issue\": \"...\"}}"},
+                                ],
+                            }],
+                        )
+                        vision_text = vision_resp.content[0].text
+                        if "```" in vision_text:
+                            vision_text = vision_text.split("```json")[-1].split("```")[0] if "```json" in vision_text else vision_text.split("```")[1].split("```")[0]
+                        vision_result = json.loads(vision_text.strip())
+                        if not vision_result.get("matches", True):
+                            issues.append({
+                                "severity": "medium",
+                                "scene_id": scene_id,
+                                "type": "visual_mismatch",
+                                "description": vision_result.get("issue", "Image doesn't match scene description"),
+                                "suggestion": "Regenerate this scene's image with a more specific prompt",
+                            })
+                            if score > 70:
+                                score -= 5
+                except Exception as e:
+                    logger.warning(f"Visual verification failed for {asset.get('scene_id')}: {e}")
 
         if approved:
             return {

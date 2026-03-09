@@ -1,23 +1,17 @@
 import uuid
 from typing import AsyncGenerator
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from .types import AIMessage, AIProviderName, StreamChunk, ToolCall, ToolDefinition
-
-
-_configured_key: str | None = None
 
 
 class GeminiProvider:
     name: AIProviderName = "gemini"
 
     def __init__(self, api_key: str):
-        global _configured_key
-        if _configured_key != api_key:
-            genai.configure(api_key=api_key)
-            _configured_key = api_key
-        self._api_key = api_key
+        self._client = genai.Client(api_key=api_key)
 
     async def chat(
         self,
@@ -26,21 +20,25 @@ class GeminiProvider:
         system_prompt: str,
     ) -> AsyncGenerator[StreamChunk, None]:
         gemini_tools = _to_gemini_tools(tools) if tools else None
-        model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash",
+        contents = _to_gemini_contents(messages)
+
+        config = types.GenerateContentConfig(
             system_instruction=system_prompt,
             tools=gemini_tools,
         )
 
-        contents = _to_gemini_contents(messages)
-        response = await model.generate_content_async(contents, stream=True)
-
-        async for chunk in response:
-            for part in chunk.parts:
-                if hasattr(part, "text") and part.text:
+        async for chunk in self._client.aio.models.generate_content_stream(
+            model="gemini-2.0-flash",
+            contents=contents,
+            config=config,
+        ):
+            if not chunk.candidates:
+                continue
+            for part in chunk.candidates[0].content.parts:
+                if part.text:
                     yield StreamChunk(type="text", text=part.text)
 
-                if hasattr(part, "function_call") and part.function_call:
+                if part.function_call:
                     call_id = f"gemini-{uuid.uuid4()}"
                     fc = part.function_call
                     yield StreamChunk(
@@ -59,7 +57,7 @@ class GeminiProvider:
         yield StreamChunk(type="done")
 
 
-def _to_gemini_contents(messages: list[AIMessage]) -> list[dict]:
+def _to_gemini_contents(messages: list[AIMessage]) -> list[types.Content]:
     contents = []
     for msg in messages:
         if msg.role == "system":
@@ -79,46 +77,44 @@ def _to_gemini_contents(messages: list[AIMessage]) -> list[dict]:
                                 func_name = tc.name
                                 break
                 parts.append(
-                    {
-                        "function_response": {
-                            "name": func_name,
-                            "response": {"result": tr.content},
-                        }
-                    }
+                    types.Part.from_function_response(
+                        name=func_name,
+                        response={"result": tr.content},
+                    )
                 )
-            contents.append({"role": "user", "parts": parts})
+            contents.append(types.Content(role="user", parts=parts))
             continue
 
         if msg.role == "assistant" and msg.toolCalls:
             parts = []
             if msg.content:
-                parts.append({"text": msg.content})
+                parts.append(types.Part.from_text(text=msg.content))
             for tc in msg.toolCalls:
-                parts.append({
-                    "function_call": {
-                        "name": tc.name,
-                        "args": tc.arguments or {},
-                    }
-                })
-            contents.append({"role": "model", "parts": parts})
+                parts.append(
+                    types.Part.from_function_call(
+                        name=tc.name,
+                        args=tc.arguments or {},
+                    )
+                )
+            contents.append(types.Content(role="model", parts=parts))
             continue
 
-        contents.append({"role": role, "parts": [{"text": msg.content}]})
+        contents.append(
+            types.Content(role=role, parts=[types.Part.from_text(text=msg.content)])
+        )
     return contents
 
 
-def _to_gemini_tools(tools: list[ToolDefinition]) -> list[dict]:
+def _to_gemini_tools(tools: list[ToolDefinition]) -> list[types.Tool]:
     if not tools:
         return []
-    return [
-        {
-            "function_declarations": [
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.parameters,
-                }
-                for t in tools
-            ]
-        }
-    ]
+    declarations = []
+    for t in tools:
+        declarations.append(
+            types.FunctionDeclaration(
+                name=t.name,
+                description=t.description,
+                parameters=t.parameters,
+            )
+        )
+    return [types.Tool(function_declarations=declarations)]

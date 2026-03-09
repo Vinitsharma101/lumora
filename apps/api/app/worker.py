@@ -146,19 +146,21 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 )
 
             elif job_type == "text_to_video":
-                provider_name = input_data.get("provider", "google_veo")
+                from app.services.ai_video.sora_provider import SoraProvider
+                from app.services.ai_video.google_provider import GoogleAIProvider
+                from app.services.ai_video.replicate_provider import ReplicateProvider
+
+                provider_name = input_data.get("provider", "replicate")
                 if provider_name == "google_veo":
-                    from app.services.ai_video.google_provider import GoogleAIProvider
-                    provider = GoogleAIProvider()
-                    ai_result = await provider.generate_video_from_text(
+                    ai_service = GoogleAIProvider()
+                    ai_result = await ai_service.generate_video_from_text(
                         prompt=input_data["prompt"],
                         duration=input_data.get("duration", 4),
                         aspect_ratio=input_data.get("aspect_ratio", "16:9"),
                     )
                 elif provider_name == "openai_sora":
-                    from app.services.ai_video.sora_provider import SoraProvider
-                    provider = SoraProvider()
-                    ai_result = await provider.generate_video(
+                    ai_service = SoraProvider()
+                    ai_result = await ai_service.generate_video(
                         prompt=input_data["prompt"],
                         duration=input_data.get("duration", 5),
                         aspect_ratio=input_data.get("aspect_ratio", "16:9"),
@@ -359,10 +361,36 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 await update_job_status(db, job_id, "completed", 1.0, output_data={"highlights": highlights})
                 return {"status": "completed", "highlights": highlights}
 
+            elif job_type == "auto_reframe":
+                # Smart reframing: detect scenes/subjects for crop regions
+                from app.services.auto_edit.scene_detector import detect_scenes_via_api
+                scenes = await detect_scenes_via_api(input_data.get("video_url", ""))
+                await update_job_status(db, job_id, "processing", 0.5)
+                # Return scene data with target aspect ratio for client-side cropping
+                await update_job_status(db, job_id, "completed", 1.0, output_data={
+                    "scenes": scenes.get("scenes", []),
+                    "target_aspect_ratio": input_data.get("target_aspect_ratio", "9:16"),
+                })
+                return {"status": "completed", "output": scenes}
+
             elif job_type == "talking_head":
                 audio_url = input_data.get("audio_url")
+                if not audio_url and input_data.get("text"):
+                    # Generate TTS first, then use for talking head
+                    from app.services.ai_video.elevenlabs_provider import ElevenLabsProvider
+                    tts_provider = ElevenLabsProvider()
+                    try:
+                        tts_bytes = await tts_provider.text_to_speech(
+                            text=input_data["text"],
+                            voice_id=input_data.get("voice_id", "21m00Tcm4TlvDq8ikWAM"),
+                        )
+                        if tts_bytes:
+                            from app.services.storage_service import upload_bytes as upload_audio
+                            audio_url = await upload_audio(tts_bytes, "mp3", "audio/mpeg", prefix="avatar_tts")
+                    finally:
+                        await tts_provider.close()
                 if not audio_url:
-                    raise ValueError("audio_url is required for talking_head jobs")
+                    raise ValueError("audio_url is required (or provide text for auto TTS)")
                 from app.services.ai_video.replicate_provider import ReplicateProvider
                 provider = ReplicateProvider()
                 ai_result = await provider.talking_head(
@@ -409,26 +437,63 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 media_url = input_data["media_url"]
                 question = input_data.get("question")
 
-                from app.services.ai_video.replicate_provider import ReplicateProvider
-                provider = ReplicateProvider()
+                if media_type == "image" and settings.ANTHROPIC_API_KEY:
+                    # Use Claude Vision for higher quality image analysis
+                    from anthropic import AsyncAnthropic
+                    import base64 as b64module
+                    from app.http_client import get_http_client
 
-                if media_type == "image":
-                    ai_result = await provider.describe_image(
-                        media_url,
-                        question=question or "Describe this image in detail.",
-                    )
-                elif media_type == "video":
-                    ai_result = await provider.describe_video(
-                        media_url,
-                        question=question or "Describe this video in detail.",
-                    )
-                elif media_type == "audio":
-                    ai_result = await provider.transcribe_audio(
-                        media_url,
-                        language=input_data.get("language", "en"),
-                    )
+                    try:
+                        client_http = await get_http_client()
+                        img_resp = await client_http.get(media_url)
+                        img_b64 = b64module.b64encode(img_resp.content).decode("utf-8")
+                        content_type = img_resp.headers.get("content-type", "image/jpeg")
+
+                        anthropic_client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+                        vision_resp = await anthropic_client.messages.create(
+                            model="claude-sonnet-4-20250514",
+                            max_tokens=1024,
+                            messages=[{
+                                "role": "user",
+                                "content": [
+                                    {"type": "image", "source": {"type": "base64", "media_type": content_type, "data": img_b64}},
+                                    {"type": "text", "text": question or "Describe this image in detail. Include scene description, mood, colors, composition, and any text visible."},
+                                ],
+                            }],
+                        )
+                        ai_result = {
+                            "description": vision_resp.content[0].text,
+                            "provider": "anthropic_vision",
+                        }
+                    except Exception as e:
+                        logger.warning(f"Claude Vision failed, falling back to Replicate: {e}")
+                        from app.services.ai_video.replicate_provider import ReplicateProvider
+                        provider = ReplicateProvider()
+                        ai_result = await provider.describe_image(
+                            media_url,
+                            question=question or "Describe this image in detail.",
+                        )
                 else:
-                    raise ValueError(f"Unsupported media type: {media_type}")
+                    from app.services.ai_video.replicate_provider import ReplicateProvider
+                    provider = ReplicateProvider()
+
+                    if media_type == "image":
+                        ai_result = await provider.describe_image(
+                            media_url,
+                            question=question or "Describe this image in detail.",
+                        )
+                    elif media_type == "video":
+                        ai_result = await provider.describe_video(
+                            media_url,
+                            question=question or "Describe this video in detail.",
+                        )
+                    elif media_type == "audio":
+                        ai_result = await provider.transcribe_audio(
+                            media_url,
+                            language=input_data.get("language", "en"),
+                        )
+                    else:
+                        raise ValueError(f"Unsupported media type: {media_type}")
 
                 await update_job_status(
                     db, job_id, "processing", 0.5,
@@ -482,6 +547,64 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                     return {"status": "completed", "size": len(audio_bytes)}
                 finally:
                     await provider.close()
+
+            elif job_type == "music_generation":
+                prompt = input_data.get("prompt", "")
+                music_url = None
+                used_provider = None
+
+                # Primary: search Pixabay for stock music
+                pixabay_key = settings.PIXABAY_API_KEY
+                if pixabay_key and not music_url:
+                    try:
+                        from app.http_client import get_http_client
+                        client = await get_http_client()
+                        resp = await client.get(
+                            "https://pixabay.com/api/",
+                            params={
+                                "key": pixabay_key,
+                                "q": prompt,
+                                "media_type": "music",
+                                "per_page": "3",
+                            },
+                        )
+                        if resp.status_code == 200:
+                            hits = resp.json().get("hits", [])
+                            if hits:
+                                music_url = hits[0].get("audio")
+                                used_provider = "pixabay"
+                    except Exception as e:
+                        logger.warning(f"Pixabay music search failed: {e}")
+
+                # Fallback: Replicate MusicGen
+                if not music_url:
+                    from app.services.ai_video.replicate_provider import ReplicateProvider
+                    provider = ReplicateProvider()
+                    ai_result = await provider.generate_music(
+                        prompt=prompt,
+                        duration=input_data.get("duration", 30),
+                    )
+                    if ai_result.get("output_url"):
+                        music_url = ai_result["output_url"]
+                        used_provider = "replicate"
+
+                if music_url:
+                    from app.services.storage_service import upload_from_url
+                    stored_audio = await upload_from_url(
+                        music_url, "mp3", "audio/mpeg", prefix=f"music/{used_provider}"
+                    )
+                    final_result = {
+                        "provider": used_provider,
+                        "audio_url": stored_audio,
+                        "original_url": music_url,
+                    }
+                    await update_job_status(
+                        db, job_id, "completed", 1.0,
+                        output_data=final_result,
+                    )
+                    return {"status": "completed", "output": final_result}
+                else:
+                    raise ValueError("Failed to generate music from any provider")
 
             else:
                 raise ValueError(f"Unknown AI job type: {job_type}")
@@ -666,10 +789,19 @@ async def process_movie_scene(ctx: dict, session_id: str, scene_idx: int) -> dic
 
     scene = scene_plan[scene_idx]
 
+    # Wrap the flat scene list into the dict structure that downstream agents expect
+    # (GenerationAgent, EditingAgent, CaptionAgent, etc. all call scene_plan.get("scenes", []))
+    scene_plan_dict = {
+        "scenes": scene_plan,
+        "total_duration": sum(s.get("estimated_duration_seconds", s.get("duration", 15)) for s in scene_plan),
+        "resolution": {"width": 1920, "height": 1080},
+    }
+
     scene_state = {
         **orchestrator.state,
+        "scene_plan": scene_plan_dict,
         "current_scene": scene,
-        "original_query": f"Scene {scene_idx + 1}: {scene.get('description')}"
+        "current_scene_description": f"Scene {scene_idx + 1}: {scene.get('description')}",
     }
 
     # Step 1: Planning
@@ -742,11 +874,20 @@ async def process_movie_scene(ctx: dict, session_id: str, scene_idx: int) -> dic
 
     parallel_results = await asyncio.gather(color_task, audio_task, effects_task, face_task)
 
-    # Merge results from parallel agents
+    # Merge results from parallel agents — keep all state mutations, not just flags
+    MERGE_KEYS = [
+        "color_grading", "color_agent_complete",
+        "audio_processing", "audio_agent_complete", "normalized_audio_url",
+        "effects_metadata", "effects_agent_complete",
+        "face_metadata", "face_agent_complete",
+    ]
     for result in parallel_results:
-        for key, value in result.items():
-            if key.endswith("_complete") and value:
-                scene_state[key] = value
+        for key in MERGE_KEYS:
+            if key in result and result[key]:
+                scene_state[key] = result[key]
+        # Also merge any mutated generated_assets (color grading, face cropping modify these)
+        if result.get("generated_assets"):
+            scene_state["generated_assets"] = result["generated_assets"]
 
     # CaptionAgent runs after CutAgent (depends on final clip boundaries)
     try:

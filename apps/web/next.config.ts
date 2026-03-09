@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
 	productionBrowserSourceMaps: true,
 	output: "standalone",
 	serverExternalPackages: ["@remotion/renderer", "@remotion/bundler"],
+	transpilePackages: ["@gracecut/ui", "@gracecut/env"],
 	images: {
 		remotePatterns: [
 			{

@@ -25,8 +25,6 @@ class Settings(BaseSettings):
 
     # External AI Services
     ELEVENLABS_API_KEY: str | None = None
-    SUNO_API_KEY: str | None = None
-    SUNO_API_URL: str | None = None
     PEXELS_API_KEY: str | None = None
     PIXABAY_API_KEY: str | None = None
 

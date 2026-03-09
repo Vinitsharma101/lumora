@@ -118,6 +118,49 @@ export interface ImageElement extends BaseTimelineElement {
 	blendMode?: BlendMode;
 }
 
+export interface WordTiming {
+	word: string;
+	start: number;
+	end: number;
+}
+
+export type CaptionHighlightEffect =
+	| "color"
+	| "scale"
+	| "background"
+	| "glow"
+	| "underline";
+
+export type CaptionAnimationType =
+	| "none"
+	| "karaoke"
+	| "typewriter"
+	| "bounce"
+	| "wave"
+	| "pop-in";
+
+export interface CaptionStyle {
+	templateId?: string;
+	wordTimings?: WordTiming[];
+	highlightColor?: string;
+	highlightBackground?: string;
+	highlightScale?: number;
+	highlightEffect?: CaptionHighlightEffect;
+	animationType?: CaptionAnimationType;
+}
+
+export interface TextStroke {
+	color: string;
+	width: number;
+}
+
+export interface TextShadow {
+	color: string;
+	blur: number;
+	offsetX: number;
+	offsetY: number;
+}
+
 export interface TextElement extends BaseTimelineElement {
 	type: "text";
 	content: string;
@@ -142,6 +185,9 @@ export interface TextElement extends BaseTimelineElement {
 	transform: Transform;
 	opacity: number;
 	blendMode?: BlendMode;
+	caption?: CaptionStyle;
+	stroke?: TextStroke;
+	shadow?: TextShadow;
 }
 
 export interface StickerElement extends BaseTimelineElement {

@@ -19,8 +19,8 @@ class ToolResult(BaseModel):
 
 
 class AIMessage(BaseModel):
-    role: Literal["user", "assistant", "system"]
-    content: str
+    role: Literal["user", "assistant", "system", "tool"]
+    content: str | None = None
     toolCalls: list[ToolCall] | None = None
     toolResults: list[ToolResult] | None = None
 

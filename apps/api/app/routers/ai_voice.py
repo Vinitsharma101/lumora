@@ -1,58 +1,120 @@
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+import logging
 
-from app.config import settings
-from app.http_client import get_http_client
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import get_current_user
+from app.database import get_db
+from app.models import User
 from app.rate_limit import check_rate_limit
-from app.schemas.ai import VoiceRequest
+from app.schemas.ai_video import AIJobResponse
+from app.services.auto_edit.pipeline import create_auto_edit_job as create_ai_job
+from app.worker import enqueue_ai_job
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ai"])
 
-DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel
-DEFAULT_MODEL_ID = "eleven_multilingual_v2"
+
+class TTSRequest(BaseModel):
+    text: str
+    voice_id: str | None = None
+    model_id: str | None = None
+    stability: float | None = None
+    similarity_boost: float | None = None
 
 
-@router.post("/api/ai/voice")
-async def generate_voice(body: VoiceRequest, request: Request):
+class SFXRequest(BaseModel):
+    prompt: str
+    duration_seconds: float | None = None
+
+
+@router.post("/api/ai/voice/tts", response_model=AIJobResponse)
+async def text_to_speech(
+    body: TTSRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate speech from text using ElevenLabs TTS."""
     await check_rate_limit(request)
 
-    if not settings.ELEVENLABS_API_KEY:
-        return JSONResponse(
-            {"error": "ElevenLabs API key not configured. Set ELEVENLABS_API_KEY."},
-            status_code=400,
-        )
+    input_data: dict = {"text": body.text}
+    if body.voice_id:
+        input_data["voice_id"] = body.voice_id
+    if body.model_id:
+        input_data["model_id"] = body.model_id
+    if body.stability is not None:
+        input_data["stability"] = body.stability
+    if body.similarity_boost is not None:
+        input_data["similarity_boost"] = body.similarity_boost
 
-    voice_id = body.voiceId or DEFAULT_VOICE_ID
-    model_id = body.modelId or DEFAULT_MODEL_ID
-
-    client = await get_http_client()
-    response = await client.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-        headers={
-            "xi-api-key": settings.ELEVENLABS_API_KEY,
-            "Content-Type": "application/json",
-            "Accept": "audio/mpeg",
-        },
-        json={
-            "text": body.text,
-            "model_id": model_id,
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-                "style": 0.0,
-                "use_speaker_boost": True,
-            },
-        },
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="tts",
+        input_data=input_data,
+        project_id=None,
+        provider="elevenlabs",
     )
 
-    if response.status_code != 200:
-        return JSONResponse(
-            {"error": f"ElevenLabs API error: {response.text}"},
-            status_code=response.status_code,
-        )
+    await enqueue_ai_job(job.id, "tts")
 
-    return Response(
-        content=response.content,
-        media_type="audio/mpeg",
-        headers={"Content-Length": str(len(response.content))},
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
     )
+
+
+@router.post("/api/ai/voice/sfx", response_model=AIJobResponse)
+async def generate_sound_effect(
+    body: SFXRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a sound effect from a text description using ElevenLabs."""
+    await check_rate_limit(request)
+
+    input_data: dict = {"prompt": body.prompt}
+    if body.duration_seconds is not None:
+        input_data["duration_seconds"] = body.duration_seconds
+
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="sound_effect",
+        input_data=input_data,
+        project_id=None,
+        provider="elevenlabs",
+    )
+
+    await enqueue_ai_job(job.id, "sound_effect")
+
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
+    )
+
+
+@router.get("/api/ai/voice/voices")
+async def list_voices(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """List available ElevenLabs voices."""
+    await check_rate_limit(request)
+
+    from app.services.ai_video.elevenlabs_provider import ElevenLabsProvider
+
+    provider = ElevenLabsProvider()
+    try:
+        voices = await provider.list_voices()
+        return {"voices": voices}
+    finally:
+        await provider.close()

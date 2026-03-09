@@ -88,6 +88,9 @@ async def submit_answer(session_id: str, request: AgentAnswerRequest):
         orchestrator = await AgentOrchestrator.get_session(session_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Session not found")
+    except Exception as e:
+        logger.error(f"Failed to load session {session_id}: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable. Check DATABASE_URL configuration.")
 
     await orchestrator.submit_answer(
         question_id=request.question_id,
@@ -104,6 +107,9 @@ async def get_agent_status(session_id: str):
         orchestrator = await AgentOrchestrator.get_session(session_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Session not found")
+    except Exception as e:
+        logger.error(f"Failed to load session {session_id}: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable. Check DATABASE_URL configuration.")
 
     base_status = await orchestrator.get_status()
 
@@ -133,6 +139,9 @@ async def approve_checkpoint(session_id: str, request: AgentApproveRequest):
         orchestrator = await AgentOrchestrator.get_session(session_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Session not found")
+    except Exception as e:
+        logger.error(f"Failed to load session {session_id}: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable. Check DATABASE_URL configuration.")
 
     if not request.approved:
         orchestrator.state["status"] = "paused"
@@ -175,6 +184,9 @@ async def regenerate_scene(session_id: str, request: AgentRegenerateRequest):
         orchestrator = await AgentOrchestrator.get_session(session_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Session not found")
+    except Exception as e:
+        logger.error(f"Failed to load session {session_id}: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable. Check DATABASE_URL configuration.")
 
     scene_plan = orchestrator.state.get("scene_plan", [])
     if request.scene_index >= len(scene_plan):

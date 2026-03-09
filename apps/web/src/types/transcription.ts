@@ -2,10 +2,17 @@ import type { LanguageCode } from "./language";
 
 export type TranscriptionLanguage = LanguageCode | "auto";
 
+export interface TranscriptionWordTiming {
+	word: string;
+	start: number;
+	end: number;
+}
+
 export interface TranscriptionSegment {
 	text: string;
 	start: number;
 	end: number;
+	words?: TranscriptionWordTiming[];
 }
 
 export interface TranscriptionResult {
@@ -44,4 +51,5 @@ export interface CaptionChunk {
 	text: string;
 	startTime: number;
 	duration: number;
+	words?: TranscriptionWordTiming[];
 }

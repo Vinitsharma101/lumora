@@ -18,6 +18,7 @@ export interface TCanvasSize {
 export interface TProjectMetadata {
 	id: string;
 	name: string;
+	type?: "image" | "video"; // Default to "video" for older projects if undefined
 	thumbnail?: string;
 	duration: number;
 	createdAt: Date;

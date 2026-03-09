@@ -264,7 +264,7 @@ async def auto_reframe(
         provider="google",
     )
 
-    await enqueue_ai_job(job.id, "scene_detect")
+    await enqueue_ai_job(job.id, "auto_reframe")
 
     return AIJobResponse(
         job_id=job.id,
