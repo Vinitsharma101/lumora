@@ -89,7 +89,9 @@ function summarizeTrackCompact(track: TimelineTrack): TrackSummary {
 
 export function serializeEditorContext(editor: EditorCore): EditorContext {
 	const project = editor.project.getActive();
-	const scene = editor.scenes.getActiveScene();
+	const scene = editor.scenes.hasActiveScene()
+		? editor.scenes.getActiveScene()
+		: null;
 	const tracks = scene?.tracks ?? [];
 	const mediaAssets = editor.media.getAssets();
 

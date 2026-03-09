@@ -8,6 +8,7 @@ import { CommandManager } from "./managers/commands";
 import { SaveManager } from "./managers/save-manager";
 import { AudioManager } from "./managers/audio-manager";
 import { SelectionManager } from "./managers/selection-manager";
+import { TimelineEngine, AgentTimelineAPI } from "@/lib/engine";
 
 export class EditorCore {
 	private static instance: EditorCore | null = null;
@@ -23,6 +24,11 @@ export class EditorCore {
 	public readonly audio: AudioManager;
 	public readonly selection: SelectionManager;
 
+	/** The compositing engine — frame resolution, keyframes, pacing, event log. */
+	public readonly engine: TimelineEngine;
+	/** Agent-friendly command API — AI agents call this, not raw timeline methods. */
+	public readonly agentAPI: AgentTimelineAPI;
+
 	private constructor() {
 		this.command = new CommandManager();
 		this.playback = new PlaybackManager(this);
@@ -34,6 +40,18 @@ export class EditorCore {
 		this.save = new SaveManager(this);
 		this.audio = new AudioManager(this);
 		this.selection = new SelectionManager(this);
+
+		this.engine = new TimelineEngine(this.timeline.getTracks(), 0);
+		this.agentAPI = new AgentTimelineAPI(this, this.engine);
+
+		// Keep engine in sync with timeline mutations
+		this.timeline.subscribe(() => {
+			const version = this.timeline.getVersion();
+			if (this.engine.needsRebuild(version)) {
+				this.engine.rebuild(this.timeline.getTracks(), version);
+			}
+		});
+
 		this.save.start();
 	}
 

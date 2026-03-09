@@ -257,6 +257,10 @@ export class ScenesManager {
 		this.notify();
 	}
 
+	hasActiveScene(): boolean {
+		return this.active !== null;
+	}
+
 	getActiveScene(): TScene {
 		if (!this.active) {
 			throw new Error("No active scene.");

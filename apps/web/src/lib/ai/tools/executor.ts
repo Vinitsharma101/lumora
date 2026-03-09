@@ -1,7 +1,12 @@
 import { EditorCore } from "@/core";
+import { FONT_SIZE_SCALE_REFERENCE } from "@/constants/text-constants";
 import { apiFetch } from "@/lib/api-client";
-import { buildTextElement } from "@/lib/timeline/element-utils";
+import {
+	buildTextElement,
+	buildLibraryAudioElement,
+} from "@/lib/timeline/element-utils";
 import { serializeEditorContext } from "../context";
+import { AiEditingOrchestrator, getStyleProfileSummary } from "../editing";
 import type { ToolCall } from "../providers/types";
 
 export interface ToolExecutionResult {
@@ -15,7 +20,11 @@ const MOTION_TEMPLATES = [
 		id: "lower-third",
 		name: "Lower Third",
 		description: "Animated lower-third name/title bar",
-		props: { primaryText: "string", secondaryText: "string", accentColor: "string" },
+		props: {
+			primaryText: "string",
+			secondaryText: "string",
+			accentColor: "string",
+		},
 	},
 	{
 		id: "title-card",
@@ -95,7 +104,8 @@ export async function executeToolCall(
 				const fontFamily = (args.fontFamily as string) ?? "Arial";
 				const color = (args.color as string) ?? "#ffffff";
 				const backgroundColor = (args.backgroundColor as string) ?? "#000000";
-				const textAlign = (args.textAlign as "left" | "center" | "right") ?? "center";
+				const textAlign =
+					(args.textAlign as "left" | "center" | "right") ?? "center";
 				const fontWeight = (args.fontWeight as "normal" | "bold") ?? "normal";
 				const positionX = (args.positionX as number) ?? 0;
 				const positionY = (args.positionY as number) ?? 0;
@@ -109,11 +119,18 @@ export async function executeToolCall(
 						fontFamily,
 						color,
 						background: {
-							color: backgroundColor === "transparent" ? "#00000000" : backgroundColor,
+							color:
+								backgroundColor === "transparent"
+									? "#00000000"
+									: backgroundColor,
 						},
 						textAlign,
 						fontWeight,
-						transform: { scale: 1, position: { x: positionX, y: positionY }, rotate: 0 },
+						transform: {
+							scale: 1,
+							position: { x: positionX, y: positionY },
+							rotate: 0,
+						},
 					},
 					startTime,
 				});
@@ -158,7 +175,11 @@ export async function executeToolCall(
 								color: sharedBg === "transparent" ? "#00000000" : sharedBg,
 							},
 							textAlign: "center",
-							transform: { scale: 1, position: { x: 0, y: sharedPosY }, rotate: 0 },
+							transform: {
+								scale: 1,
+								position: { x: 0, y: sharedPosY },
+								rotate: 0,
+							},
 						},
 						startTime: cap.startTime,
 					});
@@ -169,8 +190,8 @@ export async function executeToolCall(
 								id: crypto.randomUUID(),
 								type: "scale_up",
 								duration: 0.2,
-								direction: "in"
-							}
+								direction: "in",
+							},
 						];
 					}
 
@@ -345,7 +366,7 @@ export async function executeToolCall(
 					await new Promise((resolve) => setTimeout(resolve, 2000));
 					const statusRes = await apiFetch(`/api/ai/jobs/${jobId}`);
 					if (!statusRes.ok) continue;
-					
+
 					const statusData = await statusRes.json();
 					if (statusData.status === "completed") {
 						completedJob = statusData;
@@ -457,7 +478,7 @@ export async function executeToolCall(
 					await new Promise((resolve) => setTimeout(resolve, 3000));
 					const statusRes = await apiFetch(`/api/ai/jobs/${jobId}`);
 					if (!statusRes.ok) continue;
-					
+
 					const statusData = await statusRes.json();
 					if (statusData.status === "completed") {
 						completedJob = statusData;
@@ -568,7 +589,6 @@ export async function executeToolCall(
 				const name = (args.name as string) ?? "Stock media";
 				const source = args.source as string;
 
-
 				const response = await apiFetch("/api/ai/stock/download", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -661,6 +681,12 @@ export async function executeToolCall(
 				const props = (args.props as Record<string, unknown>) ?? {};
 				const startTime = args.startTime as number;
 				const duration = (args.duration as number) ?? 5;
+				const canvasWidth =
+					editor.project.getActive()?.settings.canvasSize?.width ?? 1920;
+				const canvasHeight =
+					editor.project.getActive()?.settings.canvasSize?.height ?? 1080;
+				const projectFps = editor.project.getActive()?.settings.fps ?? 30;
+				const durationInFrames = Math.round(duration * projectFps);
 
 				// Call the Next.js API route (server-side Remotion rendering)
 				const response = await fetch("/api/render-motion", {
@@ -669,29 +695,45 @@ export async function executeToolCall(
 					body: JSON.stringify({
 						compositionId,
 						props,
-						width: editor.project.getActive()?.settings.canvasSize?.width ?? 1920,
-						height: editor.project.getActive()?.settings.canvasSize?.height ?? 1080,
-						fps: editor.project.getActive()?.settings.fps ?? 30,
-						durationInFrames: Math.round(duration * (editor.project.getActive()?.settings.fps ?? 30)),
+						width: canvasWidth,
+						height: canvasHeight,
+						fps: projectFps,
+						durationInFrames,
 					}),
 				});
 
 				if (!response.ok) {
-					const err = await response.json().catch(() => ({}));
+					const contentType = response.headers.get("content-type");
+					let errorMessage = `HTTP ${response.status}`;
+					if (contentType?.includes("application/json")) {
+						const err = await response.json().catch(() => ({}));
+						errorMessage =
+							(err as Record<string, string>).error || errorMessage;
+					}
 					return {
 						success: false,
-						result: `Motion graphic rendering failed: ${(err as Record<string, string>).error || "Unknown error"}`,
+						result: `Motion graphic rendering failed: ${errorMessage}`,
 						description: "Rendering motion graphic",
 					};
 				}
 
 				const blob = await response.blob();
+				if (blob.size === 0) {
+					return {
+						success: false,
+						result: "Motion graphic rendering produced an empty video",
+						description: "Rendering motion graphic",
+					};
+				}
+
 				const file = new File([blob], `${compositionId}-${Date.now()}.webm`, {
 					type: "video/webm",
 				});
+				const url = URL.createObjectURL(blob);
 
 				const projectId = editor.project.getActive()?.metadata.id;
 				if (!projectId) {
+					URL.revokeObjectURL(url);
 					return {
 						success: false,
 						result: "No active project",
@@ -702,10 +744,19 @@ export async function executeToolCall(
 				const motionAssetsBefore = editor.media.getAssets().length;
 				await editor.media.addMediaAsset({
 					projectId,
-					asset: { file, name: `Motion: ${compositionId}`, type: "video" },
+					asset: {
+						file,
+						url,
+						name: `Motion: ${compositionId}`,
+						type: "video",
+						width: canvasWidth,
+						height: canvasHeight,
+						duration,
+						fps: projectFps,
+					},
 				});
 				const motionAssetsAfter = editor.media.getAssets();
-				const newMotionAsset = motionAssetsAfter[motionAssetsAfter.length - 1];
+				const newMotionAsset = motionAssetsAfter.at(-1);
 
 				if (!newMotionAsset || motionAssetsAfter.length <= motionAssetsBefore) {
 					return {
@@ -776,7 +827,7 @@ export async function executeToolCall(
 				const jobData = await response.json();
 				return {
 					success: true,
-					result: `Image generation started. Job ID: ${(jobData as Record<string, string>).job_id}. The image will be ready shortly via FLUX AI. Poll status with job ID.`,
+					result: `Image generation started. Job ID: ${(jobData as Record<string, string>).job_id}. Use poll_job_status to check when it's ready, then import_generated_asset to add it to the timeline.`,
 					description: `Generating image: "${prompt.slice(0, 40)}..."`,
 				};
 			}
@@ -811,7 +862,7 @@ export async function executeToolCall(
 				const jobData = await response.json();
 				return {
 					success: true,
-					result: `Video generation started via ${provider}. Job ID: ${(jobData as Record<string, string>).job_id}. This may take 1-2 minutes.`,
+					result: `Video generation started via ${provider}. Job ID: ${(jobData as Record<string, string>).job_id}. This may take 1-2 minutes. Use poll_job_status to check when it's ready, then import_generated_asset to add it to the timeline.`,
 					description: `Generating video: "${prompt.slice(0, 40)}..."`,
 				};
 			}
@@ -844,7 +895,7 @@ export async function executeToolCall(
 				const jobData = await response.json();
 				return {
 					success: true,
-					result: `Video transformation started. Job ID: ${(jobData as Record<string, string>).job_id}. Applying "${prompt}" style.`,
+					result: `Video transformation started. Job ID: ${(jobData as Record<string, string>).job_id}. Applying "${prompt}" style. Use poll_job_status to check when it's ready, then import_generated_asset to add it to the timeline.`,
 					description: `Transforming video with "${prompt.slice(0, 30)}..." style`,
 				};
 			}
@@ -875,7 +926,7 @@ export async function executeToolCall(
 				const jobData = await response.json();
 				return {
 					success: true,
-					result: `Speech generation started via ElevenLabs. Job ID: ${(jobData as Record<string, string>).job_id}. Text: "${text.slice(0, 50)}..."`,
+					result: `Speech generation started via ElevenLabs. Job ID: ${(jobData as Record<string, string>).job_id}. Text: "${text.slice(0, 50)}..." Use poll_job_status to check when it's ready, then import_generated_asset with type "audio" to add it to the timeline.`,
 					description: `Generating speech: "${text.slice(0, 30)}..."`,
 				};
 			}
@@ -906,8 +957,144 @@ export async function executeToolCall(
 				const jobData = await response.json();
 				return {
 					success: true,
-					result: `Sound effect generation started. Job ID: ${(jobData as Record<string, string>).job_id}. Effect: "${prompt}"`,
+					result: `Sound effect generation started. Job ID: ${(jobData as Record<string, string>).job_id}. Effect: "${prompt}". Use poll_job_status to check when it's ready, then import_generated_asset with type "audio" to add it to the timeline.`,
 					description: `Generating SFX: "${prompt.slice(0, 30)}..."`,
+				};
+			}
+
+			// ── Job Polling ──
+			case "poll_job_status": {
+				const jobId = args.jobId as string;
+				const response = await apiFetch(`/api/ai/video/status/${jobId}`);
+
+				if (!response.ok) {
+					return {
+						success: false,
+						result: `Failed to poll job ${jobId}: ${response.statusText}`,
+						description: "Polling job status",
+					};
+				}
+
+				const statusData = (await response.json()) as Record<string, unknown>;
+				const status = statusData.status as string;
+				const progress = (statusData.progress as number) ?? 0;
+				const resultUrl = statusData.result_url as string | undefined;
+
+				if (status === "completed" && resultUrl) {
+					return {
+						success: true,
+						result: `Job ${jobId} completed! Result URL: ${resultUrl}. Use import_generated_asset to add it to the timeline.`,
+						description: "Job completed",
+					};
+				}
+
+				if (status === "failed") {
+					return {
+						success: false,
+						result: `Job ${jobId} failed: ${(statusData.error as string) || "Unknown error"}`,
+						description: "Job failed",
+					};
+				}
+
+				return {
+					success: true,
+					result: `Job ${jobId} is ${status} (${Math.round(progress * 100)}% complete). Poll again in a few seconds.`,
+					description: `Job ${status}`,
+				};
+			}
+
+			// ── Import Generated Asset ──
+			case "import_generated_asset": {
+				const assetUrl = args.url as string;
+				const assetType = args.type as string;
+				const startTime = (args.startTime as number) ?? 0;
+				const duration = (args.duration as number) ?? 5;
+				const name = (args.name as string) ?? "Generated asset";
+
+				if (assetType === "audio") {
+					const response = await fetch(assetUrl);
+					if (!response.ok) {
+						return {
+							success: false,
+							result: `Failed to download audio: ${response.statusText}`,
+							description: "Importing audio asset",
+						};
+					}
+
+					const arrayBuffer = await response.arrayBuffer();
+					const audioContext = new AudioContext();
+					const buffer = await audioContext.decodeAudioData(arrayBuffer);
+
+					const tracks = editor.timeline.getTracks();
+					const audioTrack = tracks.find((track) => track.type === "audio");
+					const trackId = audioTrack
+						? audioTrack.id
+						: editor.timeline.addTrack({ type: "audio" });
+
+					const element = buildLibraryAudioElement({
+						sourceUrl: assetUrl,
+						name,
+						duration: buffer.duration,
+						startTime,
+						buffer,
+					});
+
+					editor.timeline.insertElement({
+						placement: { mode: "explicit", trackId },
+						element,
+					});
+
+					return {
+						success: true,
+						result: `Audio "${name}" added to timeline at ${startTime}s (duration: ${buffer.duration.toFixed(1)}s).`,
+						description: `Imported audio: ${name}`,
+					};
+				}
+
+				// Video or image — download and add to media track
+				const response = await fetch(assetUrl);
+				if (!response.ok) {
+					return {
+						success: false,
+						result: `Failed to download ${assetType}: ${response.statusText}`,
+						description: `Importing ${assetType} asset`,
+					};
+				}
+
+				const blob = await response.blob();
+				const file = new File(
+					[blob],
+					`${name}.${assetType === "video" ? "mp4" : "png"}`,
+					{
+						type: assetType === "video" ? "video/mp4" : "image/png",
+					},
+				);
+
+				const mediaManager = editor.media;
+				const asset = await mediaManager.addFromFile(file);
+
+				const tracks = editor.timeline.getTracks();
+				const mediaTrack = tracks.find((track) => track.type === "media");
+				const trackId = mediaTrack
+					? mediaTrack.id
+					: editor.timeline.addTrack({ type: "media" });
+
+				editor.timeline.insertElement({
+					placement: { mode: "explicit", trackId },
+					element: {
+						type: assetType === "video" ? "video" : "image",
+						mediaId: asset.id,
+						startTime,
+						duration:
+							assetType === "video" ? (asset.duration ?? duration) : duration,
+						name,
+					},
+				});
+
+				return {
+					success: true,
+					result: `${assetType === "video" ? "Video" : "Image"} "${name}" added to timeline at ${startTime}s.`,
+					description: `Imported ${assetType}: ${name}`,
 				};
 			}
 
@@ -918,7 +1105,8 @@ export async function executeToolCall(
 				if (!response.ok) {
 					return {
 						success: false,
-						result: "Failed to list voices. ElevenLabs API key may not be configured.",
+						result:
+							"Failed to list voices. ElevenLabs API key may not be configured.",
 						description: "Listing available voices",
 					};
 				}
@@ -992,7 +1180,9 @@ export async function executeToolCall(
 			case "sample_timeline_frames": {
 				const count = Math.min((args.count as number) ?? 4, 8);
 				const project = editor.project.getActive();
-				const scene = editor.scenes.getActiveScene();
+				const scene = editor.scenes.hasActiveScene()
+					? editor.scenes.getActiveScene()
+					: null;
 
 				if (!scene || !project) {
 					return {
@@ -1043,10 +1233,7 @@ export async function executeToolCall(
 
 					for (const track of scene.tracks) {
 						for (const el of track.elements) {
-							if (
-								time >= el.startTime &&
-								time < el.startTime + el.duration
-							) {
+							if (time >= el.startTime && time < el.startTime + el.duration) {
 								const entry: {
 									name: string;
 									type: string;
@@ -1084,7 +1271,9 @@ export async function executeToolCall(
 			case "review_composition": {
 				const goal = args.goal as string;
 				const project = editor.project.getActive();
-				const scene = editor.scenes.getActiveScene();
+				const scene = editor.scenes.hasActiveScene()
+					? editor.scenes.getActiveScene()
+					: null;
 
 				if (!scene || !project) {
 					return {
@@ -1118,8 +1307,7 @@ export async function executeToolCall(
 				const ctx = serializeEditorContext(editor);
 				const trackSummary = ctx.tracks
 					.map(
-						(t) =>
-							`${t.name} (${t.type}): ${t.elements?.length ?? 0} elements`,
+						(t) => `${t.name} (${t.type}): ${t.elements?.length ?? 0} elements`,
 					)
 					.join(", ");
 
@@ -1165,7 +1353,7 @@ export async function executeToolCall(
 				};
 			}
 
-				// ── Autonomous Agent Pipeline ──
+			// ── Autonomous Agent Pipeline ──
 			case "start_agent_session": {
 				const query = args.query as string;
 				let context = (args.context as Record<string, unknown>) ?? {};
@@ -1184,15 +1372,18 @@ export async function executeToolCall(
 					};
 				}
 
-				const response = await apiFetch(`/api/agent/execute/${projectId || "default"}`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						query,
-						context,
-						media_asset_ids: mediaAssetIds,
-					}),
-				});
+				const response = await apiFetch(
+					`/api/agent/execute/${projectId || "default"}`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							query,
+							context,
+							media_asset_ids: mediaAssetIds,
+						}),
+					},
+				);
 
 				if (!response.ok) {
 					const err = await response.json().catch(() => ({}));
@@ -1280,6 +1471,8 @@ export async function executeToolCall(
 							total_elements: totalElements,
 							track_types: Object.keys(tracks),
 						};
+						(statusData as Record<string, unknown>).next_step =
+							"Use import_agent_timeline with this sessionId to load the timeline into the editor.";
 					}
 				}
 
@@ -1287,6 +1480,394 @@ export async function executeToolCall(
 					success: true,
 					result: JSON.stringify(statusData, null, 2),
 					description: `Agent status: ${statusData.status as string}`,
+				};
+			}
+
+			case "import_agent_timeline": {
+				const sessionId = args.sessionId as string;
+
+				const response = await apiFetch(`/api/agent/status/${sessionId}`);
+				if (!response.ok) {
+					return {
+						success: false,
+						result: "Failed to fetch agent session",
+						description: "Importing agent timeline",
+					};
+				}
+
+				const statusData = (await response.json()) as Record<string, unknown>;
+				if (
+					statusData.status !== "completed" ||
+					!statusData.assembled_timeline
+				) {
+					return {
+						success: false,
+						result: `Agent session is not completed (status: ${statusData.status as string}). Wait for completion first.`,
+						description: "Importing agent timeline",
+					};
+				}
+
+				const timeline = statusData.assembled_timeline as Record<
+					string,
+					unknown
+				>;
+				const tracks = timeline.tracks as
+					| Record<string, Array<Record<string, unknown>>>
+					| undefined;
+				if (!tracks) {
+					return {
+						success: false,
+						result: "No tracks found in assembled timeline",
+						description: "Importing agent timeline",
+					};
+				}
+
+				const projectId = editor.project.getActive()?.metadata.id;
+				if (!projectId) {
+					return {
+						success: false,
+						result: "No active project",
+						description: "Importing agent timeline",
+					};
+				}
+
+				let videosAdded = 0;
+				let audiosAdded = 0;
+				let textsAdded = 0;
+				const errors: string[] = [];
+
+				// Helper to download a URL and create a media asset
+				const downloadAndAddAsset = async (
+					assetUrl: string,
+					name: string,
+					mediaType: "video" | "audio" | "image",
+				): Promise<string | null> => {
+					if (!assetUrl || !assetUrl.startsWith("http")) return null;
+					try {
+						const assetResp = await fetch(assetUrl);
+						if (!assetResp.ok) return null;
+						const blob = await assetResp.blob();
+						const ext =
+							mediaType === "video"
+								? "mp4"
+								: mediaType === "audio"
+									? "mp3"
+									: "jpg";
+						const mime =
+							mediaType === "video"
+								? "video/mp4"
+								: mediaType === "audio"
+									? "audio/mpeg"
+									: "image/jpeg";
+						const file = new File([blob], `${name}.${ext}`, { type: mime });
+
+						const assetsBefore = editor.media.getAssets().length;
+						await editor.media.addMediaAsset({
+							projectId,
+							asset: {
+								file,
+								name,
+								type: mediaType === "image" ? "image" : mediaType,
+							},
+						});
+						const assetsAfter = editor.media.getAssets();
+						if (assetsAfter.length > assetsBefore) {
+							const newAsset = assetsAfter.at(-1);
+							return newAsset?.id ?? null;
+						}
+					} catch (error) {
+						errors.push(
+							`Failed to download ${name}: ${error instanceof Error ? error.message : "unknown"}`,
+						);
+					}
+					return null;
+				};
+
+				// Import video track clips
+				const videoClips = tracks.video || [];
+				for (const clip of videoClips) {
+					const assetUrl = (clip.assetUrl as string) || "";
+					const clipType = (clip.type as string) || "video";
+					const clipName = (clip.id as string) || `clip-${videosAdded}`;
+
+					if (!assetUrl || assetUrl === "deferred_motion_graphic") continue;
+
+					const mediaType =
+						clipType === "image" ? ("image" as const) : ("video" as const);
+					const mediaId = await downloadAndAddAsset(
+						assetUrl,
+						clipName,
+						mediaType,
+					);
+					if (!mediaId) continue;
+
+					if (mediaType === "video") {
+						editor.timeline.insertElement({
+							element: {
+								type: "video",
+								mediaId,
+								name: clipName,
+								duration: (clip.duration as number) || 5,
+								startTime: (clip.startTime as number) || 0,
+								trimStart: (clip.trimStart as number) || 0,
+								trimEnd: (clip.trimEnd as number) || 0,
+								muted: false,
+								hidden: false,
+								transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+								opacity: 1,
+							},
+							placement: { mode: "auto" },
+						});
+					} else {
+						editor.timeline.insertElement({
+							element: {
+								type: "image",
+								mediaId,
+								name: clipName,
+								duration: (clip.duration as number) || 5,
+								startTime: (clip.startTime as number) || 0,
+								trimStart: 0,
+								trimEnd: 0,
+								hidden: false,
+								transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+								opacity: 1,
+							},
+							placement: { mode: "auto" },
+						});
+					}
+					videosAdded++;
+				}
+
+				// Import audio tracks (voiceover, ambient, SFX)
+				const audioClips = [...(tracks.audio || []), ...(tracks.effects || [])];
+				for (const clip of audioClips) {
+					const assetUrl = (clip.assetUrl as string) || "";
+					if (!assetUrl || !assetUrl.startsWith("http")) continue;
+
+					const clipName = (clip.id as string) || `audio-${audiosAdded}`;
+					const mediaId = await downloadAndAddAsset(
+						assetUrl,
+						clipName,
+						"audio",
+					);
+					if (!mediaId) continue;
+
+					editor.timeline.insertElement({
+						element: {
+							type: "audio",
+							sourceType: "upload",
+							mediaId,
+							name: clipName,
+							duration: (clip.duration as number) || 5,
+							startTime: (clip.startTime as number) || 0,
+							trimStart: 0,
+							trimEnd: 0,
+							volume: (clip.volume as number) ?? 1,
+							muted: false,
+						},
+						placement: { mode: "auto" },
+					});
+					audiosAdded++;
+				}
+
+				// Import music track
+				const musicClips = tracks.music || [];
+				for (const clip of musicClips) {
+					const assetUrl = (clip.assetUrl as string) || "";
+					if (!assetUrl || !assetUrl.startsWith("http")) continue;
+
+					const clipName = (clip.id as string) || `music-${audiosAdded}`;
+					const mediaId = await downloadAndAddAsset(
+						assetUrl,
+						clipName,
+						"audio",
+					);
+					if (!mediaId) continue;
+
+					editor.timeline.insertElement({
+						element: {
+							type: "audio",
+							sourceType: "upload",
+							mediaId,
+							name: clipName,
+							duration: (clip.duration as number) || 30,
+							startTime: (clip.startTime as number) || 0,
+							trimStart: 0,
+							trimEnd: 0,
+							volume: (clip.volume as number) ?? 0.3,
+							muted: false,
+						},
+						placement: { mode: "auto" },
+					});
+					audiosAdded++;
+				}
+
+				// Import text overlays
+				const textClips = [...(tracks.text || []), ...(tracks.captions || [])];
+				const textItems: Array<{
+					element: ReturnType<typeof buildTextElement>;
+					placement: { mode: "auto" };
+				}> = [];
+
+				// Backend sends absolute pixel font sizes — convert to frontend relative scale
+				// Frontend formula: actualPixels = fontSize * (canvasHeight / FONT_SIZE_SCALE_REFERENCE)
+				// So: relativeFontSize = absolutePixels * FONT_SIZE_SCALE_REFERENCE / canvasHeight
+				const resolution = timeline.resolution as
+					| { width?: number; height?: number }
+					| undefined;
+				const timelineCanvasHeight =
+					resolution?.height ??
+					editor.project.getActive()?.settings.canvasSize?.height ??
+					1080;
+				const pixelToRelative =
+					FONT_SIZE_SCALE_REFERENCE / timelineCanvasHeight;
+
+				for (const clip of textClips) {
+					const content =
+						(clip.content as string) || (clip.text as string) || "";
+					if (!content) continue;
+
+					// Convert absolute pixel fontSize from backend to relative units for frontend
+					const rawFontSize = (clip.fontSize as number) || 48;
+					const relativeFontSize =
+						Math.round(rawFontSize * pixelToRelative * 10) / 10;
+
+					// Convert absolute pixel paddingX/paddingY to relative (or use as-is if small)
+					const rawPaddingX = clip.paddingX as number | undefined;
+					const rawPaddingY = clip.paddingY as number | undefined;
+
+					const element = buildTextElement({
+						raw: {
+							name: content.slice(0, 30),
+							content,
+							duration: (clip.duration as number) || 3,
+							fontSize: relativeFontSize,
+							fontFamily:
+								(clip.font as string) || (clip.fontFamily as string) || "Inter",
+							color: (clip.color as string) || "#ffffff",
+							fontWeight: (clip.fontWeight as "normal" | "bold") || "bold",
+							background: {
+								color: (clip.backgroundColor as string) || "#00000000",
+								paddingX: rawPaddingX,
+								paddingY: rawPaddingY,
+							},
+							textAlign: "center",
+							lineHeight: clip.lineHeight as number | undefined,
+							transform: { scale: 1, position: { x: 0, y: 0.35 }, rotate: 0 },
+						},
+						startTime: (clip.startTime as number) || 0,
+					});
+
+					textItems.push({ element, placement: { mode: "auto" } });
+					textsAdded++;
+				}
+
+				if (textItems.length > 0) {
+					editor.timeline.insertElements(textItems);
+				}
+
+				const summary = `Imported ${videosAdded} video/image clips, ${audiosAdded} audio clips, ${textsAdded} text overlays.`;
+				const errorSummary =
+					errors.length > 0
+						? ` ${errors.length} errors: ${errors.slice(0, 3).join("; ")}`
+						: "";
+
+				return {
+					success: true,
+					result: `${summary}${errorSummary}`,
+					description: "Importing agent timeline into editor",
+				};
+			}
+
+			case "ai_edit": {
+				const orchestrator = new AiEditingOrchestrator();
+				const editResult = await orchestrator.execute(
+					args.prompt as string,
+					editor,
+				);
+
+				if (!editResult.success) {
+					return {
+						success: false,
+						result: `AI edit failed: ${editResult.error ?? "Unknown error"}`,
+						description: "Executing AI-driven edit",
+					};
+				}
+
+				const session = editResult.session;
+				const commandCount = session?.commands?.length ?? 0;
+				const planActionCount = session?.plan?.actions?.length ?? 0;
+
+				return {
+					success: true,
+					result: JSON.stringify({
+						sessionId: session?.id,
+						status: session?.status,
+						intent: session?.intent?.type,
+						confidence: session?.intent?.confidence,
+						planActions: planActionCount,
+						commandsExecuted: commandCount,
+						validation: editResult.validation,
+						message: `Executed ${commandCount} commands for "${session?.intent?.type}" intent. Session ID: ${session?.id}. Use ai_edit_rollback to undo.`,
+					}),
+					description: "Executing AI-driven edit",
+				};
+			}
+
+			case "ai_edit_analyze": {
+				const orchestrator = new AiEditingOrchestrator();
+				const metrics = orchestrator.analyzeCurrentTimeline(editor);
+
+				return {
+					success: true,
+					result: JSON.stringify(metrics, null, 2),
+					description: "Analyzing timeline for AI editing",
+				};
+			}
+
+			case "ai_edit_rollback": {
+				const orchestrator = new AiEditingOrchestrator();
+				const rollbackResult = orchestrator.rollback(
+					args.sessionId as string,
+					editor,
+				);
+
+				return {
+					success: rollbackResult,
+					result: rollbackResult
+						? `Successfully rolled back session ${args.sessionId}`
+						: `Failed to rollback session ${args.sessionId}. Session may not exist or was already rolled back.`,
+					description: "Rolling back AI edit session",
+				};
+			}
+
+			case "ai_edit_get_sessions": {
+				const orchestrator = new AiEditingOrchestrator();
+				const sessions = orchestrator.getAllSessions();
+
+				const summaries = sessions.map((session) => ({
+					id: session.id,
+					status: session.status,
+					intent: session.intent?.type,
+					confidence: session.intent?.confidence,
+					commandCount: session.commands?.length ?? 0,
+					createdAt: session.createdAt,
+				}));
+
+				return {
+					success: true,
+					result: JSON.stringify(summaries, null, 2),
+					description: "Listing AI edit sessions",
+				};
+			}
+
+			case "ai_edit_get_style_profiles": {
+				const profileSummary = getStyleProfileSummary();
+
+				return {
+					success: true,
+					result: JSON.stringify(profileSummary, null, 2),
+					description: "Listing available style profiles",
 				};
 			}
 
