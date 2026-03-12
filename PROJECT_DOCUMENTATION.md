@@ -1,8 +1,8 @@
-# GraceCut — Project Documentation
+# Grace Studio — Project Documentation
 
-## 1. What is GraceCut?
+## 1. What is Grace Studio?
 
-GraceCut is a closed-source, agentic video editing platform built for web, desktop, and mobile. It features a timeline-based editor with AI-powered editing capabilities, allowing users to create, edit, and export professional videos directly in the browser.
+Grace Studio is a closed-source, agentic video editing platform built for web, desktop, and mobile. It features a timeline-based editor with AI-powered editing capabilities, allowing users to create, edit, and export professional videos directly in the browser.
 
 Key highlights:
 - Browser-based timeline video editor with multi-track support
@@ -49,7 +49,7 @@ Key highlights:
 ## 3. Monorepo Structure
 
 ```
-gracecut/
+grace-studio/
 ├── apps/
 │   └── web/                    # Main Next.js application (the editor)
 ├── packages/
@@ -62,9 +62,9 @@ gracecut/
 ```
 
 ### Workspaces
-- **`apps/web`** (`@gracecut/web`) — The main Next.js 16 editor application
-- **`packages/env`** (`@gracecut/env`) — Zod-validated environment variables for web and tools
-- **`packages/ui`** (`@gracecut/ui`) — Shared icon library (Hugeicons, brand SVGs)
+- **`apps/web`** (`@grace-studio/web`) — The main Next.js 16 editor application
+- **`packages/env`** (`@grace-studio/env`) — Zod-validated environment variables for web and tools
+- **`packages/ui`** (`@grace-studio/ui`) — Shared icon library (Hugeicons, brand SVGs)
 
 ---
 
@@ -403,7 +403,7 @@ Zustand stores use `persist` middleware with version tracking and migration func
 
 ### 11.1 Overview
 
-GraceCut features an AI chat assistant that can autonomously edit videos through 50+ tools. It supports three providers:
+Grace Studio features an AI chat assistant that can autonomously edit videos through 50+ tools. It supports three providers:
 - **Claude** (Anthropic)
 - **GPT** (OpenAI)
 - **Gemini** (Google)
@@ -459,7 +459,7 @@ User types message in AIChatInput
 - **Methods:** Email/password sign-up and sign-in
 - **Sessions:** Database-backed (PostgreSQL), not JWT-only
 - **Rate Limiting:** Redis via Upstash (serverless Redis HTTP adapter)
-- **Token Storage:** `gracecut_token` in localStorage
+- **Token Storage:** `grace-studio_token` in localStorage
 - **API Auth:** Bearer token in Authorization header via `apiFetch()` wrapper
 - **RLS:** All database tables have Row-Level Security enabled
 

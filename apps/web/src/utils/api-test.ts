@@ -97,7 +97,7 @@ export async function testAPIConnection(): Promise<void> {
 
 	// Test 4: Auth Token Storage
 	try {
-		const token = localStorage.getItem("gracecut_token");
+		const token = localStorage.getItem("grace_studio_token");
 		results.push({
 			name: "Auth Token Storage",
 			passed: !token, // Passed if no token (as expected for new session)

@@ -1,4 +1,7 @@
 import type { BlendMode, Transform } from "./rendering";
+import type { Keyframe } from "@/lib/engine/keyframes";
+
+export type { Keyframe } from "@/lib/engine/keyframes";
 
 export interface Bookmark {
 	time: number;
@@ -97,6 +100,10 @@ interface BaseTimelineElement {
 	trimEnd: number;
 	effects?: Effect[];
 	transitions?: Transition[];
+	/** Keyframes for property animation (scale, position, opacity, etc.). */
+	keyframes?: Keyframe[];
+	/** If set, this element renders a nested timeline instead of a direct asset. */
+	nestedTimelineId?: string;
 }
 
 export interface VideoElement extends BaseTimelineElement {

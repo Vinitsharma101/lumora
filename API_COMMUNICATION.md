@@ -1,6 +1,6 @@
 # API Communication Setup Guide
 
-This document describes how the GraceCut frontend (Next.js) and backend (FastAPI) communicate.
+This document describes how the Grace Studio frontend (Next.js) and backend (FastAPI) communicate.
 
 ## Architecture Overview
 
@@ -95,7 +95,7 @@ Located in `apps/api/.env`:
 
 ```dotenv
 # Database (required for operations)
-DATABASE_URL=postgresql+asyncpg://gracecut:gracecut@localhost:5432/gracecut
+DATABASE_URL=postgresql+asyncpg://grace-studio:grace-studio@localhost:5432/grace-studio
 
 # Authentication
 JWT_SECRET=your-secret-key-change-in-production
@@ -142,7 +142,7 @@ CORS_ORIGINS=http://localhost:3000
 **For production:**
 
 ```dotenv
-CORS_ORIGINS=https://app.gracecut.com,https://www.gracecut.com
+CORS_ORIGINS=https://app.gracestudio.app,https://www.gracestudio.app
 ```
 
 ## Starting the Services
@@ -223,7 +223,7 @@ The backend will be available at `http://localhost:8000`
 ### Authentication issues
 
 1. Check JWT_SECRET is set in `apps/api/.env`
-2. Verify token is being stored: Open DevTools → Application → Local Storage → `gracecut_token`
+2. Verify token is being stored: Open DevTools → Application → Local Storage → `grace-studio_token`
 3. Test token in Authorization header
 
 ## Frontend Code Organization

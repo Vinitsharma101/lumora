@@ -22,6 +22,7 @@ export class MediaManager {
 		const newAsset: MediaAsset = {
 			...asset,
 			id: generateUUID(),
+			url: asset.url ?? URL.createObjectURL(asset.file),
 		};
 
 		this.assets = [...this.assets, newAsset];

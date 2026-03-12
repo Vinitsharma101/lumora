@@ -52,7 +52,7 @@ export function Hero() {
 						src="/landing-page-dark.png"
 						width={1903}
 						height={1269}
-						alt="GraceCut video editor interface"
+						alt="Grace Studio video editor interface"
 						className="w-full"
 						priority
 					/>

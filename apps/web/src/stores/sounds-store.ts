@@ -206,7 +206,7 @@ export const useSoundsStore = create<SoundsStore>((set, get) => ({
 	},
 
 	addSoundToTimeline: async ({ sound }) => {
-		const audioUrl = sound.previewUrl;
+		const audioUrl = sound.downloadUrl || sound.previewUrl;
 		if (!audioUrl) {
 			toast.error("Sound file not available");
 			return false;

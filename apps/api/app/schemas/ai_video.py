@@ -72,6 +72,20 @@ class TextToImageRequest(BaseModel):
     height: int = 1024
     model: Literal["schnell", "dev"] = "schnell"
     style: str | None = None
+    provider: Literal["replicate", "google_imagen", "openai"] = "replicate"
+    aspect_ratio: Literal["1:1", "16:9", "9:16", "4:3", "3:4"] | None = None
+    num_images: int = 1
+    negative_prompt: str | None = None
+    style_preset: str | None = None
+    style_reference_urls: list[str] | None = None
+    seed: int | None = None
+    project_id: str | None = None
+
+
+class ImageEditRequest(BaseModel):
+    source_image_url: str
+    edit_prompt: str
+    provider: Literal["replicate", "google_imagen", "openai"] = "openai"
     project_id: str | None = None
 
 
@@ -146,6 +160,8 @@ class AutoCaptionsRequest(BaseModel):
     project_id: str | None = None
     language: str = "en"
     style: Literal["default", "viral", "karaoke", "minimal"] = "default"
+    canvas_width: int = 1920
+    canvas_height: int = 1080
 
 
 class CreateShortsRequest(BaseModel):

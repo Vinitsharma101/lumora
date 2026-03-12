@@ -11,7 +11,7 @@ import { NextResponse } from "next/server";
  */
 let cachedBundlePath: string | null = null;
 
-const RENDER_TIMEOUT_MS = 60_000;
+const RENDER_TIMEOUT_MS = 120_000;
 
 async function getBundle(): Promise<string> {
 	if (cachedBundlePath) {
@@ -85,7 +85,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 		// Render to a temporary file
 		const outputPath = join(
 			tmpdir(),
-			`gracecut-motion-${compositionId}-${Date.now()}.webm`,
+			`grace-studio-motion-${compositionId}-${Date.now()}.webm`,
 		);
 
 		console.log("[render-motion] Rendering to:", outputPath);
@@ -99,7 +99,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
 		const timeoutPromise = new Promise<never>((_, reject) => {
 			setTimeout(
-				() => reject(new Error("Render timed out after 60s")),
+				() => reject(new Error("Render timed out after 120s")),
 				RENDER_TIMEOUT_MS,
 			);
 		});

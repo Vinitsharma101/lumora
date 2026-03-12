@@ -34,7 +34,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { OcSlidersVerticalIcon } from "@gracecut/ui/icons";
+import { OcSlidersVerticalIcon } from "@grace-studio/ui/icons";
 import type { StickerCategory } from "@/types/stickers";
 import { STICKER_CATEGORIES } from "@/constants/sticker-constants";
 import { parseStickerId } from "@/lib/stickers/sticker-id";

@@ -10,6 +10,7 @@ import json
 import logging
 from anthropic import AsyncAnthropic
 from app.config import settings
+from app.services.text_sizing import get_sizing_context_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,11 @@ class PlanningAgent:
         # Build context about dialog and shots from director
         scene_context = json.dumps(current_scene, indent=2) if isinstance(current_scene, dict) else str(current_scene)
 
+        # Compute responsive text sizing context for this canvas
+        canvas_width = state.get("clarified_context", {}).get("canvas_width", 1920)
+        canvas_height = state.get("clarified_context", {}).get("canvas_height", 1080)
+        sizing_context = get_sizing_context_for_prompt(canvas_width, canvas_height)
+
         response = await self.client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=8192,
@@ -164,10 +170,12 @@ Character Profiles:
 {json.dumps(state.get('character_profiles', {}), indent=2)}
 
 Canvas Dimensions:
-- Width: {state.get('clarified_context', {}).get('canvas_width', 1920)}px
-- Height: {state.get('clarified_context', {}).get('canvas_height', 1080)}px
+- Width: {canvas_width}px
+- Height: {canvas_height}px
 - FPS: {state.get('clarified_context', {}).get('fps', 30)}
-- Aspect Ratio: {state.get('clarified_context', {}).get('canvas_width', 1920)}:{state.get('clarified_context', {}).get('canvas_height', 1080)}
+- Aspect Ratio: {canvas_width}:{canvas_height}
+
+{sizing_context}
 
 Duration should match the estimated_duration_seconds from the scene or default to 15s.
 Break this scene into 2-5 shots with detailed generation prompts.

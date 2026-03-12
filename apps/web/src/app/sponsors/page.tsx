@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { BasePage } from "@/app/base-page";
 
 export const metadata: Metadata = {
-	title: "Sponsors - GraceCut",
+	title: "Sponsors - Grace Studio",
 	description:
-		"Support GraceCut and help us build the future of AI-powered video editing.",
+		"Support Grace Studio and help us build the future of AI-powered video editing.",
 	openGraph: {
-		title: "Sponsors - GraceCut",
+		title: "Sponsors - Grace Studio",
 		description:
-			"Support GraceCut and help us build the future of AI-powered video editing.",
+			"Support Grace Studio and help us build the future of AI-powered video editing.",
 		type: "website",
 	},
 };
@@ -21,7 +21,7 @@ export default function SponsorsPage() {
 					Sponsors
 				</h1>
 				<p className="text-muted-foreground mx-auto max-w-2xl text-xl leading-relaxed text-pretty">
-					No sponsors at this time. Interested in partnering with GraceCut?
+					No sponsors at this time. Interested in partnering with Grace Studio?
 					Reach out to us.
 				</p>
 			</div>

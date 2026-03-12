@@ -293,9 +293,42 @@ class GenerationAgent:
                     raise ValueError(f"No stock {media_type} found for query: {search_query}")
 
             elif visual_type == "motion_graphic":
-                # Defer rendering: Remotion handles this natively on the timeline.
-                result["video_url"] = "deferred_motion_graphic"
-                gen_success = True
+                # Generate motion graphics as animated video via text-to-video
+                # with a motion-graphic-specific prompt
+                motion_prompt = f"Clean motion graphic animation: {full_prompt}. Smooth animation, flat design, professional broadcast quality, no live action."
+                try:
+                    gen_result = await self.replicate.text_to_video(
+                        prompt=motion_prompt,
+                        duration=min(duration, 8),
+                        wait=True,
+                    )
+                    output_url = gen_result.get("output_url")
+                    if output_url:
+                        stored_url = await upload_from_url(
+                            output_url, "mp4", "video/mp4",
+                            prefix=f"motion/{scene_id}"
+                        )
+                        result["video_url"] = stored_url
+                        gen_success = True
+                    else:
+                        # Fallback: generate as static image
+                        gen_result = await self.replicate.text_to_image(
+                            prompt=motion_prompt,
+                            width=gen_width,
+                            height=gen_height,
+                            wait=True,
+                        )
+                        output_url = gen_result.get("output_url")
+                        if output_url:
+                            stored_url = await upload_from_url(
+                                output_url, "png", "image/png",
+                                prefix=f"motion/{scene_id}"
+                            )
+                            result["image_url"] = stored_url
+                            gen_success = True
+                except Exception as e:
+                    logger.error(f"Motion graphic generation failed for {scene_id}: {e}")
+                    result["visual_error"] = str(e)
 
         except Exception as e:
             logger.error(f"Visual generation failed for {scene_id}: {e}")

@@ -50,7 +50,7 @@ export function UseCases() {
 					First cut to final cut
 				</h2>
 				<p className="text-muted-foreground mt-4 text-lg">
-					Whatever you&apos;re making, GraceCut has you covered.
+					Whatever you&apos;re making, Grace Studio has you covered.
 				</p>
 			</div>
 			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

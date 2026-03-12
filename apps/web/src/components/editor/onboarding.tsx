@@ -28,13 +28,13 @@ export function Onboarding() {
 	const getStepTitle = () => {
 		switch (step) {
 			case 0:
-				return "Welcome to GraceCut Beta! 🎉";
+				return "Welcome to Grace Studio Beta! 🎉";
 			case 1:
 				return "⚠️ This is a super early beta!";
 			case 2:
 				return "🦋 Have fun testing!";
 			default:
-				return "GraceCut Onboarding";
+				return "Grace Studio Onboarding";
 		}
 	};
 
@@ -44,8 +44,8 @@ export function Onboarding() {
 				return (
 					<div className="space-y-5">
 						<div className="space-y-3">
-							<Title title="Welcome to GraceCut Beta! 🎉" />
-							<Description description="You're among the first to try GraceCut - an agentic video editing platform powered by AI." />
+							<Title title="Welcome to Grace Studio Beta! 🎉" />
+							<Description description="You're among the first to try Grace Studio - an agentic video editing platform powered by AI." />
 						</div>
 						<NextButton onClick={handleNext}>Next</NextButton>
 					</div>
@@ -68,7 +68,7 @@ export function Onboarding() {
 						<div className="space-y-3">
 							<Title title={getStepTitle()} />
 							<Description
-								description={`Join our [Discord](${SOCIAL_LINKS.discord}), chat with cool people and share feedback to help make GraceCut the best editor ever.`}
+								description={`Join our [Discord](${SOCIAL_LINKS.discord}), chat with cool people and share feedback to help make Grace Studio the best editor ever.`}
 							/>
 						</div>
 						<NextButton onClick={handleClose}>Finish</NextButton>

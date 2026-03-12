@@ -33,12 +33,12 @@ export function Footer() {
 						<div className="mb-4 flex items-center gap-2.5">
 							<Image
 								src={DEFAULT_LOGO_URL}
-								alt="GraceCut"
+								alt="Grace Studio"
 								width={24}
 								height={24}
 								className="invert dark:invert-0"
 							/>
-							<span className="font-semibold">GraceCut</span>
+							<span className="font-semibold">Grace Studio</span>
 						</div>
 						<p className="text-muted-foreground mb-5 max-w-xs text-sm leading-relaxed">
 							An agentic video editing platform powered by AI.
@@ -100,7 +100,7 @@ export function Footer() {
 				<div className="mt-12 border-t border-white/10 pt-8">
 					<div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
 						<div className="text-muted-foreground text-sm">
-							&copy; {new Date().getFullYear()} GraceCut. All rights
+							&copy; {new Date().getFullYear()} Grace Studio. All rights
 							reserved.
 						</div>
 						<div className="flex items-center gap-4">

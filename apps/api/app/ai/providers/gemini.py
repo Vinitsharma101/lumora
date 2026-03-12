@@ -27,11 +27,12 @@ class GeminiProvider:
             tools=gemini_tools,
         )
 
-        async for chunk in self._client.aio.models.generate_content_stream(
+        stream = await self._client.aio.models.generate_content_stream(
             model="gemini-2.0-flash",
             contents=contents,
             config=config,
-        ):
+        )
+        async for chunk in stream:
             if not chunk.candidates:
                 continue
             for part in chunk.candidates[0].content.parts:

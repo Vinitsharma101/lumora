@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GraceCut is a closed-source, agentic video editing platform for web, desktop, and mobile. The main application is a Next.js 16 web app with a timeline-based editor. Database is hosted on Supabase (managed PostgreSQL).
+Grace Studio is a closed-source, agentic video editing platform for web, desktop, and mobile. The main application is a Next.js 16 web app with a timeline-based editor. Database is hosted on Supabase (managed PostgreSQL).
 
 ## Monorepo Structure
 
@@ -38,14 +38,14 @@ bun run db:generate          # Generate Drizzle migrations
 bun run db:migrate           # Run migrations
 bun run db:push:local        # Push schema to local DB
 
-# Testing
+# Testing (bun:test — not Jest/Vitest)
 bun test                     # Run all tests
 bun test <file>              # Run a single test file
 ```
 
 ## Code Style
 
-- **Biome** for linting and formatting (not ESLint/Prettier)
+- **Biome** for linting and formatting (not ESLint/Prettier), configured via Ultracite ruleset
 - Tab indentation, 80-char line width, double quotes
 - No TypeScript enums — use `as const` objects
 - No `any` type
@@ -56,6 +56,7 @@ bun test <file>              # Run a single test file
 - Use `import type` / `export type` for type-only imports/exports
 - Don't use `@ts-ignore`
 - Comments should explain WHY, not WHAT — avoid AI-style comments that narrate the code
+- Accessibility enforced: meaningful alt text, proper ARIA roles, semantic elements over role attributes, `type` on buttons, keyboard handlers alongside mouse handlers
 
 ## Architecture
 
@@ -119,11 +120,31 @@ Actions = "what triggered this", Commands = "how to do it (and undo it)".
 
 Better Auth with email/password, database-backed sessions, Redis rate limiting via Upstash.
 
-### API Routes
+### API Routes (Next.js — apps/web)
 
 - `/api/auth/[...all]` — Authentication (Better Auth)
 - `/api/ai/*` — AI features (chat with Claude/OpenAI/Gemini, music, voice, stock media)
 - `/api/sounds/search` — Pixabay sound/music search
+- `/api/render-motion` — Remotion video rendering endpoint
+
+### Backend API (FastAPI — apps/api)
+
+Python FastAPI backend with async SQLAlchemy, managed separately from the Next.js app.
+
+```
+apps/api/app/
+├── agents/       — AI agents (director, editing, generation, planning, review)
+├── routers/      — API route handlers
+├── schemas/      — Pydantic request/response models
+├── services/     — Business logic (pacing engine, style profiles, text sizing)
+├── ai/           — AI provider integrations
+├── models.py     — Database models
+└── worker.py     — Background jobs (ARQ task queue with Redis)
+```
+
+- **Linting**: Ruff (100-char line length, Python 3.12 target)
+- **Testing**: pytest + pytest-asyncio
+- **API keys**: stored in `apps/api/.env`
 
 ## Contribution Focus Areas
 

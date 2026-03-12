@@ -5,6 +5,7 @@ import {
 	buildTextElement,
 	buildLibraryAudioElement,
 } from "@/lib/timeline/element-utils";
+import { processMediaAssets } from "@/lib/media/processing";
 import { serializeEditorContext } from "../context";
 import { AiEditingOrchestrator, getStyleProfileSummary } from "../editing";
 import type { ToolCall } from "../providers/types";
@@ -617,10 +618,31 @@ export async function executeToolCall(
 					};
 				}
 
+				const processedAssets = await processMediaAssets({
+					files: [file],
+				});
+				if (processedAssets.length === 0) {
+					return {
+						success: false,
+						result: "Failed to process stock media",
+						description: "Processing stock media",
+					};
+				}
+				const processed = processedAssets[0];
+
 				const stockAssetsBefore = editor.media.getAssets().length;
 				await editor.media.addMediaAsset({
 					projectId,
-					asset: { file, name, type: mediaType },
+					asset: {
+						file: processed.file,
+						name,
+						type: mediaType,
+						url: processed.url,
+						thumbnailUrl: processed.thumbnailUrl,
+						width: processed.width,
+						height: processed.height,
+						duration: processed.duration,
+					},
 				});
 				const stockAssetsAfter = editor.media.getAssets();
 				const newStockAsset = stockAssetsAfter[stockAssetsAfter.length - 1];
@@ -803,6 +825,8 @@ export async function executeToolCall(
 				const prompt = args.prompt as string;
 				const width = (args.width as number) ?? 1024;
 				const height = (args.height as number) ?? 1024;
+				const provider = (args.provider as string) ?? "replicate";
+				const numImages = (args.numImages as number) ?? 1;
 
 				const response = await apiFetch("/api/ai/video/text-to-image", {
 					method: "POST",
@@ -812,6 +836,8 @@ export async function executeToolCall(
 						width,
 						height,
 						model: "schnell",
+						provider,
+						num_images: numImages,
 					}),
 				});
 
@@ -824,10 +850,27 @@ export async function executeToolCall(
 					};
 				}
 
-				const jobData = await response.json();
+				const jobData = (await response.json()) as Record<string, string>;
+
+				// Add to image-gen store so it appears in the AI Image gallery
+				const { useImageGenStore } = await import(
+					"@/stores/image-gen-store"
+				);
+				useImageGenStore.getState().addImage({
+					id: crypto.randomUUID(),
+					prompt,
+					provider: provider as "replicate" | "google_imagen" | "openai",
+					status: "generating",
+					urls: [],
+					jobId: jobData.job_id,
+					parentImageId: null,
+					errorMessage: null,
+					createdAt: Date.now(),
+				});
+
 				return {
 					success: true,
-					result: `Image generation started. Job ID: ${(jobData as Record<string, string>).job_id}. Use poll_job_status to check when it's ready, then import_generated_asset to add it to the timeline.`,
+					result: `Image generation started (${provider}). Job ID: ${jobData.job_id}. Use poll_job_status to check when it's ready, then import_generated_asset to add it to the timeline.`,
 					description: `Generating image: "${prompt.slice(0, 40)}..."`,
 				};
 			}

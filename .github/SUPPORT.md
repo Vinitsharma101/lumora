@@ -1,6 +1,6 @@
 # Getting Help
 
-Thanks for using GraceCut! If you need help, here are your options:
+Thanks for using Grace Studio! If you need help, here are your options:
 
 ## Documentation
 
@@ -8,7 +8,7 @@ Thanks for using GraceCut! If you need help, here are your options:
 
 ## Support
 
-- Email: support@gracecut.app
+- Email: support@gracestudio.app
 - Join our Discord community
 
 ## Response Times

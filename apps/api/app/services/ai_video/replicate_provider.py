@@ -199,6 +199,8 @@ class ReplicateProvider:
         height: int = 1024,
         model: str = "schnell",
         wait: bool = False,
+        negative_prompt: str | None = None,
+        seed: int | None = None,
     ) -> dict:
         """Generate an image from text using FLUX models on Replicate."""
         self._ensure_client()
@@ -208,7 +210,11 @@ class ReplicateProvider:
             if model == "schnell"
             else "black-forest-labs/flux-dev"
         )
-        input_data = {"prompt": prompt, "width": width, "height": height, "num_outputs": 1}
+        input_data: dict = {"prompt": prompt, "width": width, "height": height, "num_outputs": 1}
+        if negative_prompt:
+            input_data["negative_prompt"] = negative_prompt
+        if seed is not None:
+            input_data["seed"] = seed
 
         if wait:
             return await self.run_and_wait(model_id, input_data, timeout=300)

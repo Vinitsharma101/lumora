@@ -250,6 +250,7 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 # Two-step pipeline: transcribe first, then format captions
                 from app.services.auto_edit.silence_detector import transcribe_for_silence_detection
                 from app.services.auto_edit.caption_generator import format_captions_with_llm
+                from app.services.text_sizing import calculate_caption_font_size
 
                 # Step 1: Transcribe to get segments
                 transcribe_result = await transcribe_for_silence_detection(
@@ -266,6 +267,17 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                     segments,
                     input_data.get("style", "default"),
                 )
+
+                # Step 3: Apply responsive sizing to captions
+                canvas_width = input_data.get("canvas_width", 1920)
+                canvas_height = input_data.get("canvas_height", 1080)
+                caption_sizing = calculate_caption_font_size(
+                    canvas_width, canvas_height,
+                    style=input_data.get("style", "default"),
+                )
+                for caption in captions:
+                    caption.update(caption_sizing)
+
                 await update_job_status(db, job_id, "completed", 1.0, output_data={"captions": captions})
                 return {"status": "completed", "captions": captions}
 
@@ -404,19 +416,141 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 )
 
             elif job_type == "text_to_image":
-                from app.services.ai_video.replicate_provider import ReplicateProvider
-                provider = ReplicateProvider()
-                ai_result = await provider.text_to_image(
-                    prompt=input_data["prompt"],
-                    width=input_data.get("width", 1024),
-                    height=input_data.get("height", 1024),
-                    model=input_data.get("model", "schnell"),
-                )
+                provider_name = input_data.get("provider", "replicate")
+                num_images = input_data.get("num_images", 1)
+                aspect_ratio = input_data.get("aspect_ratio", "1:1")
+                negative_prompt = input_data.get("negative_prompt")
+                style_preset = input_data.get("style_preset")
+                style_reference_urls = input_data.get("style_reference_urls")
+                seed = input_data.get("seed")
+
+                # Build enhanced prompt with style preset suffix
+                enhanced_prompt = input_data["prompt"]
+                if style_preset:
+                    from app.services.ai_video.style_presets import STYLE_PRESET_SUFFIXES
+                    suffix = STYLE_PRESET_SUFFIXES.get(style_preset)
+                    if suffix:
+                        enhanced_prompt = f"{enhanced_prompt}, {suffix}"
+
+                if provider_name == "openai":
+                    from app.services.ai_video.openai_image_provider import OpenAIImageProvider
+                    oai = OpenAIImageProvider()
+
+                    # If style references provided, use edit endpoint
+                    if style_reference_urls:
+                        ai_result = await oai.text_to_image_with_reference(
+                            prompt=enhanced_prompt,
+                            style_reference_url=style_reference_urls[0],
+                            aspect_ratio=aspect_ratio,
+                            n=num_images,
+                        )
+                    else:
+                        oai_prompt = enhanced_prompt
+                        if negative_prompt:
+                            oai_prompt = f"{oai_prompt}. Avoid: {negative_prompt}"
+                        ai_result = await oai.text_to_image(
+                            prompt=oai_prompt,
+                            aspect_ratio=aspect_ratio,
+                            n=num_images,
+                        )
+                    # Upload base64 images to Supabase Storage
+                    from app.services.storage_service import upload_bytes
+                    image_urls = []
+                    for b64_img in ai_result.get("images_b64", []):
+                        import base64 as b64mod
+                        img_bytes = b64mod.b64decode(b64_img)
+                        url = await upload_bytes(img_bytes, "png", "image/png", prefix="ai_image")
+                        image_urls.append(url)
+                    await update_job_status(
+                        db, job_id, "completed", 1.0,
+                        output_data={"image_urls": image_urls, "provider": "openai"},
+                    )
+                    return {"status": "completed", "image_urls": image_urls}
+
+                elif provider_name == "google_imagen":
+                    from app.services.ai_video.google_provider import GoogleAIProvider
+                    google = GoogleAIProvider()
+                    ai_result = await google.generate_image(
+                        prompt=enhanced_prompt,
+                        aspect_ratio=aspect_ratio,
+                        count=num_images,
+                        negative_prompt=negative_prompt,
+                    )
+                    # Imagen returns base64 in predictions
+                    from app.services.storage_service import upload_bytes
+                    import base64 as b64mod
+                    image_urls = []
+                    predictions = ai_result.get("predictions", [])
+                    for pred in predictions:
+                        if "bytesBase64Encoded" in pred:
+                            img_bytes = b64mod.b64decode(pred["bytesBase64Encoded"])
+                            url = await upload_bytes(img_bytes, "png", "image/png", prefix="ai_image")
+                            image_urls.append(url)
+                    await update_job_status(
+                        db, job_id, "completed", 1.0,
+                        output_data={"image_urls": image_urls, "provider": "google_imagen"},
+                    )
+                    return {"status": "completed", "image_urls": image_urls}
+
+                else:
+                    from app.services.ai_video.replicate_provider import ReplicateProvider
+                    provider = ReplicateProvider()
+                    ai_result = await provider.text_to_image(
+                        prompt=enhanced_prompt,
+                        width=input_data.get("width", 1024),
+                        height=input_data.get("height", 1024),
+                        model=input_data.get("model", "schnell"),
+                        negative_prompt=negative_prompt,
+                        seed=seed,
+                    )
+                    await update_job_status(
+                        db, job_id, "processing", 0.5,
+                        output_data=ai_result,
+                        provider_job_id=ai_result.get("prediction_id"),
+                    )
+
+            elif job_type == "edit_image":
+                provider_name = input_data.get("provider", "openai")
+                source_url = input_data["source_image_url"]
+
+                # Download source image
+                from app.http_client import get_http_client
+                http_client = await get_http_client()
+                img_resp = await http_client.get(source_url)
+                img_resp.raise_for_status()
+                import base64 as b64mod
+                source_b64 = b64mod.b64encode(img_resp.content).decode()
+
+                if provider_name == "openai":
+                    from app.services.ai_video.openai_image_provider import OpenAIImageProvider
+                    oai = OpenAIImageProvider()
+                    ai_result = await oai.edit_image(
+                        image_b64=source_b64,
+                        prompt=input_data["edit_prompt"],
+                    )
+                elif provider_name == "google_imagen":
+                    from app.services.ai_video.google_provider import GoogleAIProvider
+                    google = GoogleAIProvider()
+                    ai_result = await google.edit_image(
+                        image_url=source_url,
+                        prompt=input_data["edit_prompt"],
+                    )
+                else:
+                    raise ValueError(f"Edit image not supported for provider: {provider_name}")
+
+                # Upload result images to storage
+                from app.services.storage_service import upload_bytes
+                image_urls = []
+                for b64_img in ai_result.get("images_b64", []):
+                    img_bytes = b64mod.b64decode(b64_img)
+                    url = await upload_bytes(img_bytes, "png", "image/png", prefix="ai_image_edit")
+                    image_urls.append(url)
+
                 await update_job_status(
-                    db, job_id, "processing", 0.5,
-                    output_data=ai_result,
-                    provider_job_id=ai_result.get("prediction_id"),
+                    db, job_id, "completed", 1.0,
+                    output_data={"image_urls": image_urls, "provider": provider_name},
                 )
+                return {"status": "completed", "image_urls": image_urls}
 
             elif job_type == "video_to_video":
                 from app.services.ai_video.replicate_provider import ReplicateProvider
@@ -699,24 +833,30 @@ async def process_movie_director(ctx: dict, session_id: str) -> dict:
             return {"status": "waiting_qa", "questions": len(orchestrator.state["pending_questions"])}
         orchestrator.state["qa_completed"] = True
 
-    director = DirectorAgent()
-    orchestrator.state = await director.run(orchestrator.state)
-    await orchestrator.save_state()
-
-    if orchestrator.state.get("status") == "failed":
-        return {"error": orchestrator.state.get("error")}
-
-    # Estimate costs and pause for user approval
-    cost_estimate = estimate_pipeline_cost(orchestrator.state)
-    orchestrator.state["cost_estimate"] = cost_estimate
-
-    if not orchestrator.state.get("cost_approved") and cost_estimate.get("total_estimated_usd", 0) > 0:
-        orchestrator.state["status"] = "waiting_approval"
-        orchestrator.state["messages"] = orchestrator.state.get("messages", []) + [
-            {"role": "agent", "content": f"Estimated cost: ${cost_estimate['total_estimated_usd']:.2f}. Approve to continue."}
-        ]
+    # Skip Director if already completed (e.g. resuming after cost approval)
+    if not orchestrator.state.get("director_completed"):
+        director = DirectorAgent()
+        orchestrator.state = await director.run(orchestrator.state)
         await orchestrator.save_state()
-        return {"status": "waiting_approval", "cost_estimate": cost_estimate}
+
+        if orchestrator.state.get("status") == "failed":
+            return {"error": orchestrator.state.get("error")}
+
+        orchestrator.state["director_completed"] = True
+
+        # Estimate costs and pause for user approval
+        cost_estimate = estimate_pipeline_cost(orchestrator.state)
+        orchestrator.state["cost_estimate"] = cost_estimate
+
+        if not orchestrator.state.get("cost_approved") and cost_estimate.get("total_estimated_usd", 0) > 0:
+            orchestrator.state["status"] = "waiting_approval"
+            orchestrator.state["messages"] = orchestrator.state.get("messages", []) + [
+                {"role": "agent", "content": f"Estimated cost: ${cost_estimate['total_estimated_usd']:.2f}. Approve to continue."}
+            ]
+            await orchestrator.save_state()
+            return {"status": "waiting_approval", "cost_estimate": cost_estimate}
+
+        await orchestrator.save_state()
 
     acts = orchestrator.state.get("acts", [])
     scene_plan = orchestrator.state.get("scene_plan", [])
@@ -791,10 +931,13 @@ async def process_movie_scene(ctx: dict, session_id: str, scene_idx: int) -> dic
 
     # Wrap the flat scene list into the dict structure that downstream agents expect
     # (GenerationAgent, EditingAgent, CaptionAgent, etc. all call scene_plan.get("scenes", []))
+    character_profiles = orchestrator.state.get("character_profiles", {})
+    canvas_w = character_profiles.get("_canvas_width", 1920)
+    canvas_h = character_profiles.get("_canvas_height", 1080)
     scene_plan_dict = {
         "scenes": scene_plan,
         "total_duration": sum(s.get("estimated_duration_seconds", s.get("duration", 15)) for s in scene_plan),
-        "resolution": {"width": 1920, "height": 1080},
+        "resolution": {"width": canvas_w, "height": canvas_h},
     }
 
     scene_state = {
@@ -914,7 +1057,10 @@ async def process_movie_scene(ctx: dict, session_id: str, scene_idx: int) -> dic
     await orchestrator.save_state()
 
     # If this is the last tracked scene to finish, run Consistency Engine
-    if len(assembled) == len(scene_plan):
+    # Use a flag to prevent duplicate triggers from race conditions
+    if len(assembled) == len(scene_plan) and not orchestrator.state.get("consistency_triggered"):
+        orchestrator.state["consistency_triggered"] = True
+        await orchestrator.save_state()
         pool = ctx["redis"]
         await pool.enqueue_job("process_movie_consistency", session_id)
 
@@ -973,35 +1119,60 @@ async def process_movie_assembly(ctx: dict, session_id: str) -> dict:
     orchestrator = await AgentOrchestrator.get_session(session_id)
     assembled = orchestrator.state.get("assembled_timeline", {})
     scene_plan = orchestrator.state.get("scene_plan", [])
+
+    # Resolve canvas dimensions from character_profiles or defaults
+    character_profiles = orchestrator.state.get("character_profiles", {})
+    canvas_width = character_profiles.get("_canvas_width", 1920)
+    canvas_height = character_profiles.get("_canvas_height", 1080)
     
     master_timeline = {
         "total_duration": 0.0,
         "fps": 24,
-        "resolution": {"width": 1920, "height": 1080},
+        "resolution": {"width": canvas_width, "height": canvas_height},
         "tracks": {
             "video": [],
             "overlay": [],
             "audio": [],
             "music": [],
             "text": [],
-            "effects": []
+            "effects": [],
+            "captions": [],
         }
     }
     
     current_offset = 0.0
+    skipped_scenes = []
     
     for idx in range(len(scene_plan)):
         scene_tl = assembled.get(f"scene_{idx}")
-        if not scene_tl:
+        if not scene_tl or not isinstance(scene_tl, dict):
+            skipped_scenes.append(idx)
+            continue
+
+        scene_tracks = scene_tl.get("tracks", {})
+        if not scene_tracks or not isinstance(scene_tracks, dict):
+            skipped_scenes.append(idx)
             continue
             
         scene_duration = scene_tl.get("total_duration", 0)
         
         # Merge tracks, applying chronological time offset
-        for track_type, clips in scene_tl.get("tracks", {}).items():
+        for track_type, clips in scene_tracks.items():
+            if not isinstance(clips, list):
+                continue
+            # Ensure the track type exists in master timeline
+            if track_type not in master_timeline["tracks"]:
+                master_timeline["tracks"][track_type] = []
             for clip in clips:
+                if not isinstance(clip, dict):
+                    continue
                 new_clip = dict(clip)
-                new_clip["startTime"] += current_offset
+                new_clip["startTime"] = new_clip.get("startTime", 0) + current_offset
+                # Standardize asset URL field name
+                if "asset_url" in new_clip and "assetUrl" not in new_clip:
+                    new_clip["assetUrl"] = new_clip.pop("asset_url")
+                if "audio_url" in new_clip and "assetUrl" not in new_clip:
+                    new_clip["assetUrl"] = new_clip.pop("audio_url")
                 master_timeline["tracks"][track_type].append(new_clip)
                 
         current_offset += scene_duration
@@ -1011,8 +1182,9 @@ async def process_movie_assembly(ctx: dict, session_id: str) -> dict:
     # Save to AgentSession
     orchestrator.state["assembled_timeline"] = master_timeline
     orchestrator.state["status"] = "completed"
+    skip_msg = f" ({len(skipped_scenes)} scenes skipped due to errors)" if skipped_scenes else ""
     orchestrator.state["messages"] = orchestrator.state.get("messages", []) + [
-        {"role": "agent", "content": f"🎬 1-Hour Movie Pipeline Complete! {len(scene_plan)} scenes assembled into a {master_timeline['total_duration']}s master timeline."}
+        {"role": "agent", "content": f"🎬 Movie Pipeline Complete! {len(scene_plan) - len(skipped_scenes)} scenes assembled into a {master_timeline['total_duration']:.1f}s master timeline.{skip_msg}"}
     ]
     await orchestrator.save_state()
     

@@ -51,7 +51,7 @@ const roadmapItems: RoadmapItem[] = [
 	{
 		title: "Native app (mobile/desktop)",
 		description:
-			"Native GraceCut apps for Mac, Windows, Linux, iOS, and Android.",
+			"Native Grace Studio apps for Mac, Windows, Linux, iOS, and Android.",
 		status: {
 			text: "Not started",
 			type: "default",
@@ -60,28 +60,28 @@ const roadmapItems: RoadmapItem[] = [
 ];
 
 export const metadata: Metadata = {
-	title: "Roadmap - GraceCut",
+	title: "Roadmap - Grace Studio",
 	description:
-		"See what's coming next for GraceCut - the AI-powered video editing platform.",
+		"See what's coming next for Grace Studio - the AI-powered video editing platform.",
 	openGraph: {
-		title: "GraceCut Roadmap - What's Coming Next",
+		title: "Grace Studio Roadmap - What's Coming Next",
 		description:
-			"See what's coming next for GraceCut - the AI-powered video editing platform.",
+			"See what's coming next for Grace Studio - the AI-powered video editing platform.",
 		type: "website",
 		images: [
 			{
 				url: "/open-graph/roadmap.jpg",
 				width: 1200,
 				height: 630,
-				alt: "GraceCut Roadmap",
+				alt: "Grace Studio Roadmap",
 			},
 		],
 	},
 	twitter: {
 		card: "summary_large_image",
-		title: "GraceCut Roadmap - What's Coming Next",
+		title: "Grace Studio Roadmap - What's Coming Next",
 		description:
-			"See what's coming next for GraceCut - the AI-powered video editing platform.",
+			"See what's coming next for Grace Studio - the AI-powered video editing platform.",
 		images: ["/open-graph/roadmap.jpg"],
 	},
 };
@@ -90,7 +90,7 @@ export default function RoadmapPage() {
 	return (
 		<BasePage
 			title="Roadmap"
-			description={`What's coming next for GraceCut (last updated: ${LAST_UPDATED})`}
+			description={`What's coming next for Grace Studio (last updated: ${LAST_UPDATED})`}
 		>
 			<div className="mx-auto flex max-w-4xl flex-col gap-16">
 				<div className="flex flex-col gap-6">

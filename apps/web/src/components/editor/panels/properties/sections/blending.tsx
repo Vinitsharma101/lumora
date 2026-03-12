@@ -6,7 +6,7 @@ import {
 	DEFAULT_BLEND_MODE,
 	DEFAULT_OPACITY,
 } from "@/constants/timeline-constants";
-import { OcCheckerboardIcon } from "@gracecut/ui/icons";
+import { OcCheckerboardIcon } from "@grace-studio/ui/icons";
 import { Fragment, useRef } from "react";
 import { Section, SectionContent, SectionField, SectionHeader } from "../section";
 import {

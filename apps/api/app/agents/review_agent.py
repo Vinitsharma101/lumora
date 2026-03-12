@@ -2,6 +2,7 @@
 Review Agent — Validates the assembled timeline for coherence, character
 consistency, duration accuracy, and audio synchronization.
 Uses the Anthropic API directly to analyze the plan.
+Validates text overlay sizing against canvas dimensions.
 """
 
 import json
@@ -9,6 +10,9 @@ import logging
 from anthropic import AsyncAnthropic
 from app.config import settings
 from app.http_client import get_http_client
+from app.services.text_sizing import calculate_font_size, get_aspect_category
+from app.services.pacing_engine import analyze_pacing
+from app.services.style_profiles import get_style_profile
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +106,69 @@ Evaluate quality and list any issues.
         issues = review.get("issues", [])
         score = review.get("score", 75)
 
+        # ── Text sizing validation ──────────────────────────────────────
+        # Check that text overlays use appropriate font sizes for the canvas
+        resolution = plan.get("resolution", {}) if isinstance(plan, dict) else {}
+        canvas_width = resolution.get("width", 1920)
+        canvas_height = resolution.get("height", 1080)
+        aspect = get_aspect_category(canvas_width, canvas_height)
+
+        min_readable = calculate_font_size(canvas_width, canvas_height, role="small")
+        max_reasonable = calculate_font_size(canvas_width, canvas_height, role="title") + 20
+
+        text_tracks = []
+        if isinstance(timeline, dict):
+            text_tracks = timeline.get("tracks", {}).get("text", [])
+
+        for text_clip in text_tracks:
+            fs = text_clip.get("fontSize", 48)
+            clip_id = text_clip.get("id", "unknown")
+            if fs < min_readable:
+                issues.append({
+                    "severity": "medium",
+                    "scene_id": clip_id,
+                    "type": "text_too_small",
+                    "description": f"Text overlay '{clip_id}' has fontSize={fs}px, below minimum readable {min_readable}px for {canvas_width}x{canvas_height} ({aspect})",
+                    "suggestion": f"Increase fontSize to at least {min_readable}px",
+                })
+                if score > 70:
+                    score -= 2
+            elif fs > max_reasonable:
+                issues.append({
+                    "severity": "low",
+                    "scene_id": clip_id,
+                    "type": "text_too_large",
+                    "description": f"Text overlay '{clip_id}' has fontSize={fs}px, above maximum {max_reasonable}px for this canvas",
+                    "suggestion": f"Reduce fontSize to at most {max_reasonable}px",
+                })
+
         # Visual verification: spot-check generated image assets with Claude Vision
+        # ── Pacing analysis ──────────────────────────────────────────────
+        content_type = state.get("content_type", "youtube")
+        style_profile_dict = state.get("style_profile")
+        if style_profile_dict:
+            style_profile = get_style_profile(style_profile_dict.get("name", content_type))
+        else:
+            style_profile = get_style_profile(content_type)
+
+        pacing_report = analyze_pacing(timeline, style_profile, plan)
+        pacing_score = pacing_report.get("overall_score", 100)
+
+        # Incorporate pacing issues into the review
+        for pacing_issue in pacing_report.get("issues", []):
+            issues.append({
+                "severity": "medium" if "below" in pacing_issue or "above" in pacing_issue else "low",
+                "scene_id": "",
+                "type": "pacing",
+                "description": pacing_issue,
+                "suggestion": "",
+            })
+
+        # Blend LLM score with pacing score (70% LLM, 30% pacing engine)
+        score = int(score * 0.7 + pacing_score * 0.3)
+        approved = score >= 80
+
+        # ── Visual verification: spot-check generated image assets with Claude Vision
         if settings.ANTHROPIC_API_KEY and assets:
             image_assets = [a for a in assets if a.get("image_url") and not a.get("error")][:2]
             for asset in image_assets:
@@ -152,9 +218,10 @@ Evaluate quality and list any issues.
                 "review_notes": [],
                 "review_score": score,
                 "review_suggestions": review.get("suggestions", []),
+                "pacing_report": pacing_report,
                 "status": "completed",
                 "messages": state.get("messages", []) + [
-                    {"role": "agent", "content": f"✅ Review passed (score: {score}/100). Timeline is ready!"}
+                    {"role": "agent", "content": f"Review passed (score: {score}/100, pacing: {pacing_score}/100). Timeline is ready!"}
                 ]
             }
         else:

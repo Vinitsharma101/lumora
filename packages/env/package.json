@@ -1,7 +1,7 @@
 {
-	"name": "@gracecut/env",
+	"name": "@grace-studio/env",
 	"version": "0.0.0",
-	"description": "Environment package for GraceCut",
+	"description": "Environment package for Grace Studio",
 	"main": "./src/index.ts",
 	"types": "./src/index.ts",
 	"exports": {

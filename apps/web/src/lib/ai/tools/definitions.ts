@@ -54,7 +54,8 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 				fontSize: {
 					type: "number",
-					description: "Font size (default: 15, range: 5-300)",
+					description:
+						"Relative font size (3-20 typical range: subtitles 4-6, body 6-8, titles 10-15). Scales automatically with canvas size.",
 				},
 				fontFamily: {
 					type: "string",
@@ -81,8 +82,7 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 				positionX: {
 					type: "number",
-					description:
-						"Horizontal position (-1 to 1, 0 = center). Default: 0",
+					description: "Horizontal position (-1 to 1, 0 = center). Default: 0",
 				},
 				positionY: {
 					type: "number",
@@ -111,13 +111,31 @@ export const AI_TOOLS: ToolDefinition[] = [
 						},
 						required: ["content", "startTime", "duration"],
 					},
-					description: "Array of captions with content, startTime, and duration",
+					description:
+						"Array of captions with content, startTime, and duration",
 				},
-				fontSize: { type: "number", description: "Shared font size for all captions" },
-				fontFamily: { type: "string", description: "Shared font family (e.g. Anton, Bangers, Montserrat)" },
-				color: { type: "string", description: "Shared text color for all captions" },
-				backgroundColor: { type: "string", description: "Shared background color" },
-				animation: { type: "string", enum: ["none", "pop_in"], description: "Optional entrance animation" },
+				fontSize: {
+					type: "number",
+					description:
+						"Shared relative font size for all captions (typical: 3-6)",
+				},
+				fontFamily: {
+					type: "string",
+					description: "Shared font family (e.g. Anton, Bangers, Montserrat)",
+				},
+				color: {
+					type: "string",
+					description: "Shared text color for all captions",
+				},
+				backgroundColor: {
+					type: "string",
+					description: "Shared background color",
+				},
+				animation: {
+					type: "string",
+					enum: ["none", "pop_in"],
+					description: "Optional entrance animation",
+				},
 				positionY: {
 					type: "number",
 					description: "Shared vertical position for all captions",
@@ -130,12 +148,14 @@ export const AI_TOOLS: ToolDefinition[] = [
 	// ── Element Manipulation ──
 	{
 		name: "update_element",
-		description:
-			"Modify properties of an existing element on the timeline.",
+		description: "Modify properties of an existing element on the timeline.",
 		parameters: {
 			type: "object",
 			properties: {
-				trackId: { type: "string", description: "Track ID containing the element" },
+				trackId: {
+					type: "string",
+					description: "Track ID containing the element",
+				},
 				elementId: { type: "string", description: "Element ID to update" },
 				updates: {
 					type: "object",
@@ -189,7 +209,10 @@ export const AI_TOOLS: ToolDefinition[] = [
 			properties: {
 				trackId: { type: "string" },
 				elementId: { type: "string" },
-				newStartTime: { type: "number", description: "New start time in seconds" },
+				newStartTime: {
+					type: "number",
+					description: "New start time in seconds",
+				},
 			},
 			required: ["trackId", "elementId", "newStartTime"],
 		},
@@ -254,7 +277,10 @@ export const AI_TOOLS: ToolDefinition[] = [
 			type: "object",
 			properties: {
 				text: { type: "string", description: "Text to convert to speech" },
-				startTime: { type: "number", description: "Where to place on timeline (seconds)" },
+				startTime: {
+					type: "number",
+					description: "Where to place on timeline (seconds)",
+				},
 				voiceId: {
 					type: "string",
 					description: "ElevenLabs voice ID (optional, uses default narrator)",
@@ -275,7 +301,10 @@ export const AI_TOOLS: ToolDefinition[] = [
 					description:
 						"Description of the music (e.g., 'upbeat corporate background music')",
 				},
-				duration: { type: "number", description: "Desired duration in seconds" },
+				duration: {
+					type: "number",
+					description: "Desired duration in seconds",
+				},
 				startTime: {
 					type: "number",
 					description: "Where to place on timeline (seconds). Default: 0",
@@ -320,8 +349,7 @@ export const AI_TOOLS: ToolDefinition[] = [
 	},
 	{
 		name: "add_stock_media_to_timeline",
-		description:
-			"Download a stock media item and add it to the timeline.",
+		description: "Download a stock media item and add it to the timeline.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -331,8 +359,14 @@ export const AI_TOOLS: ToolDefinition[] = [
 					enum: ["video", "image"],
 					description: "Media type",
 				},
-				startTime: { type: "number", description: "Start time on timeline (seconds)" },
-				duration: { type: "number", description: "Duration (for images, in seconds)" },
+				startTime: {
+					type: "number",
+					description: "Start time on timeline (seconds)",
+				},
+				duration: {
+					type: "number",
+					description: "Duration (for images, in seconds)",
+				},
 				name: { type: "string", description: "Display name for the media" },
 				source: {
 					type: "string",
@@ -354,7 +388,13 @@ export const AI_TOOLS: ToolDefinition[] = [
 			properties: {
 				compositionId: {
 					type: "string",
-					enum: ["lower-third", "title-card", "subscribe-cta", "countdown", "text-reveal"],
+					enum: [
+						"lower-third",
+						"title-card",
+						"subscribe-cta",
+						"countdown",
+						"text-reveal",
+					],
 					description: "The motion graphic template to render",
 				},
 				props: {
@@ -385,11 +425,11 @@ export const AI_TOOLS: ToolDefinition[] = [
 		},
 	},
 
-	// ── AI Image Generation (Replicate FLUX) ──
+	// ── AI Image Generation (Multi-Provider) ──
 	{
 		name: "generate_image",
 		description:
-			"Generate an image from a text description using FLUX AI model and add it to the timeline. Use for creating custom visuals, backgrounds, thumbnails, or any image needed in the video.",
+			"Generate an image from a text description using AI models (FLUX, Google Imagen, or OpenAI DALL-E) and add it to the timeline. Use for creating custom visuals, backgrounds, thumbnails, or any image needed in the video.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -404,6 +444,16 @@ export const AI_TOOLS: ToolDefinition[] = [
 				height: {
 					type: "number",
 					description: "Image height in pixels (default: 1024, max: 1440)",
+				},
+				provider: {
+					type: "string",
+					enum: ["replicate", "google_imagen", "openai"],
+					description:
+						"AI provider to use (default: replicate). replicate = FLUX, google_imagen = Imagen 3, openai = gpt-image-1",
+				},
+				numImages: {
+					type: "number",
+					description: "Number of images to generate (1-4, default: 1)",
 				},
 				startTime: {
 					type: "number",
@@ -446,7 +496,8 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 				startTime: {
 					type: "number",
-					description: "Where to place on timeline (seconds). Default: end of timeline",
+					description:
+						"Where to place on timeline (seconds). Default: end of timeline",
 				},
 			},
 			required: ["prompt"],
@@ -467,11 +518,13 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 				prompt: {
 					type: "string",
-					description: "Description of the desired transformation/style (e.g., 'anime style', 'oil painting', 'neon cyberpunk')",
+					description:
+						"Description of the desired transformation/style (e.g., 'anime style', 'oil painting', 'neon cyberpunk')",
 				},
 				strength: {
 					type: "number",
-					description: "Transformation strength (0.0-1.0, default: 0.7). Higher = more transformation",
+					description:
+						"Transformation strength (0.0-1.0, default: 0.7). Higher = more transformation",
 				},
 			},
 			required: ["videoUrl", "prompt"],
@@ -492,7 +545,8 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 				voiceId: {
 					type: "string",
-					description: "ElevenLabs voice ID. Use list_voices to see available voices. Default: Rachel narrator voice.",
+					description:
+						"ElevenLabs voice ID. Use list_voices to see available voices. Default: Rachel narrator voice.",
 				},
 				startTime: {
 					type: "number",
@@ -513,11 +567,13 @@ export const AI_TOOLS: ToolDefinition[] = [
 			properties: {
 				prompt: {
 					type: "string",
-					description: "Description of the sound effect (e.g., 'thunder crack', 'whoosh transition', 'crowd cheering')",
+					description:
+						"Description of the sound effect (e.g., 'thunder crack', 'whoosh transition', 'crowd cheering')",
 				},
 				durationSeconds: {
 					type: "number",
-					description: "Desired duration in seconds (optional, AI decides if not specified)",
+					description:
+						"Desired duration in seconds (optional, AI decides if not specified)",
 				},
 				startTime: {
 					type: "number",
@@ -525,6 +581,55 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 			},
 			required: ["prompt"],
+		},
+	},
+
+	// ── Job Polling & Asset Import ──
+	{
+		name: "poll_job_status",
+		description:
+			"Poll the status of an async generation job (image, video, speech, SFX). Returns status, progress percentage, and result URL when complete. Use after generate_image, generate_video, transform_video, generate_speech, or generate_sound_effect.",
+		parameters: {
+			type: "object",
+			properties: {
+				jobId: {
+					type: "string",
+					description: "The job ID returned by a generation tool",
+				},
+			},
+			required: ["jobId"],
+		},
+	},
+	{
+		name: "import_generated_asset",
+		description:
+			"Download a completed generated asset and add it to the timeline. Use after poll_job_status shows the job is complete and provides a result URL.",
+		parameters: {
+			type: "object",
+			properties: {
+				url: {
+					type: "string",
+					description: "The result URL from a completed generation job",
+				},
+				type: {
+					type: "string",
+					enum: ["video", "image", "audio"],
+					description: "Asset type",
+				},
+				startTime: {
+					type: "number",
+					description: "Start time on timeline (seconds). Default: 0",
+				},
+				duration: {
+					type: "number",
+					description: "Duration on timeline (seconds, for images). Default: 5",
+				},
+				name: {
+					type: "string",
+					description: "Display name for the asset",
+				},
+			},
+			required: ["url", "type"],
 		},
 	},
 
@@ -559,7 +664,8 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 				question: {
 					type: "string",
-					description: "Specific question about the media (optional, defaults to general description)",
+					description:
+						"Specific question about the media (optional, defaults to general description)",
 				},
 			},
 			required: ["mediaUrl", "mediaType"],
@@ -576,7 +682,8 @@ export const AI_TOOLS: ToolDefinition[] = [
 			properties: {
 				query: {
 					type: "string",
-					description: "Search query (e.g., 'upbeat corporate', 'calm piano', 'epic cinematic')",
+					description:
+						"Search query (e.g., 'upbeat corporate', 'calm piano', 'epic cinematic')",
 				},
 			},
 			required: ["query"],
@@ -616,7 +723,8 @@ export const AI_TOOLS: ToolDefinition[] = [
 			properties: {
 				goal: {
 					type: "string",
-					description: "What the edit should achieve (e.g., 'title text centered with good contrast')",
+					description:
+						"What the edit should achieve (e.g., 'title text centered with good contrast')",
 				},
 			},
 			required: ["goal"],
@@ -633,11 +741,13 @@ export const AI_TOOLS: ToolDefinition[] = [
 			properties: {
 				query: {
 					type: "string",
-					description: "The user's full video creation request (e.g., 'create a 30s YouTube video about space exploration')",
+					description:
+						"The user's full video creation request (e.g., 'create a 30s YouTube video about space exploration')",
 				},
 				context: {
 					type: "object",
-					description: "Additional context (aspect ratio, style, etc. from Q&A)",
+					description:
+						"Additional context (aspect ratio, style, etc. from Q&A)",
 				},
 				mediaAssetIds: {
 					type: "array",
@@ -684,6 +794,84 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 			},
 			required: ["sessionId"],
+		},
+	},
+	{
+		name: "import_agent_timeline",
+		description:
+			"Import the completed agent pipeline's assembled timeline into the editor. Downloads all generated media assets (videos, images, audio) and places them on the timeline with correct timing, text overlays, and audio tracks. Use after get_agent_status shows status 'completed'.",
+		parameters: {
+			type: "object",
+			properties: {
+				sessionId: {
+					type: "string",
+					description: "The agent session ID whose timeline to import",
+				},
+			},
+			required: ["sessionId"],
+		},
+	},
+
+	// ── AI Editing Pipeline (Intent → Plan → Commands) ──
+	{
+		name: "ai_edit",
+		description:
+			"Execute an AI editing pipeline that parses a natural language prompt into structured editing intent, analyzes the timeline, generates an edit plan, maps it to validated commands, and executes them as a single reversible batch. Use for high-level editing requests like 'cut silences', 'make it more engaging', 'shorten to 30 seconds', 'make it cinematic'. Returns session ID for undo/rollback.",
+		parameters: {
+			type: "object",
+			properties: {
+				prompt: {
+					type: "string",
+					description:
+						"Natural language editing instruction (e.g., 'cut all silences', 'make it like TikTok', 'shorten to 30 seconds')",
+				},
+			},
+			required: ["prompt"],
+		},
+	},
+	{
+		name: "ai_edit_analyze",
+		description:
+			"Analyze the current timeline and return detailed metrics: average clip length, silence segments, energy score, pacing score, caption coverage, etc. Use to understand the timeline state before suggesting edits.",
+		parameters: {
+			type: "object",
+			properties: {},
+			required: [],
+		},
+	},
+	{
+		name: "ai_edit_rollback",
+		description:
+			"Undo/rollback all changes from a specific AI editing session. Reverts the timeline to the state before the AI edit was executed.",
+		parameters: {
+			type: "object",
+			properties: {
+				sessionId: {
+					type: "string",
+					description: "The AI editing session ID to rollback",
+				},
+			},
+			required: ["sessionId"],
+		},
+	},
+	{
+		name: "ai_edit_get_sessions",
+		description:
+			"List all AI editing sessions with their status, intent, plan, and command counts. Useful for reviewing what AI edits have been made.",
+		parameters: {
+			type: "object",
+			properties: {},
+			required: [],
+		},
+	},
+	{
+		name: "ai_edit_get_style_profiles",
+		description:
+			"List all available editing style profiles (reel, youtube, podcast, documentary, corporate, cinematic) with their parameters. Use to understand what styles are available for 'apply style' commands.",
+		parameters: {
+			type: "object",
+			properties: {},
+			required: [],
 		},
 	},
 ];

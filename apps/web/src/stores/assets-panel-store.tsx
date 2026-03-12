@@ -1,6 +1,7 @@
 import type { ElementType } from "react";
 import { create } from "zustand";
 import {
+	AiImageIcon,
 	ArrowRightDoubleIcon,
 	ClosedCaptionIcon,
 	Folder03Icon,
@@ -30,6 +31,7 @@ export const TAB_KEYS = [
 	"filters",
 	"adjustment",
 	"ai-generate",
+	"ai-image",
 	"auto-edit",
 	"collaborate",
 	"settings",
@@ -87,6 +89,10 @@ export const tabs = {
 	"ai-generate": {
 		icon: createHugeiconsIcon({ icon: AiBrainIcon }),
 		label: "AI Generate",
+	},
+	"ai-image": {
+		icon: createHugeiconsIcon({ icon: AiImageIcon }),
+		label: "AI Image",
 	},
 	"auto-edit": {
 		icon: createHugeiconsIcon({ icon: Scissor01Icon }),

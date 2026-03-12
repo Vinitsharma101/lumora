@@ -107,30 +107,35 @@ class AgentOrchestrator:
         )
 
         # Save initial state to DB
-        async with async_session_factory() as db:
-            session_model = AgentSession(
-                id=self.session_id,
-                project_id=self.project_id,
-                user_id=self.user_id,
-                status=self.state["status"],
-                query=query,
-                plan={},
-                pending_questions=[],
-                answered_questions={},
-                generated_assets=[],
-                assembled_timeline={},
-                raw_video_url=context.get("raw_video_url"),
-                chunk_metadata=[],
-                video_map={},
-                global_style_context={},
-                review_notes=[],
-                messages=[],
-                error=None,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
-            )
-            db.add(session_model)
-            await db.commit()
+        try:
+            async with async_session_factory() as db:
+                session_model = AgentSession(
+                    id=self.session_id,
+                    project_id=self.project_id,
+                    user_id=self.user_id,
+                    status=self.state["status"],
+                    query=query,
+                    plan={},
+                    pending_questions=[],
+                    answered_questions={},
+                    generated_assets=[],
+                    assembled_timeline={},
+                    raw_video_url=context.get("raw_video_url"),
+                    chunk_metadata=[],
+                    video_map={},
+                    global_style_context={},
+                    review_notes=[],
+                    messages=[],
+                    error=None,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                )
+                db.add(session_model)
+                await db.commit()
+                logger.info(f"Agent session {self.session_id} saved to DB")
+        except Exception as e:
+            logger.error(f"Failed to save agent session to DB: {e}", exc_info=True)
+            raise
 
         # Enqueue the top-level job via ARQ
         pool = await get_arq_pool()

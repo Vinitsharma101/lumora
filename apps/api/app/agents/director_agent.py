@@ -2,12 +2,16 @@
 Director Agent — The top-level agent for autonomous 1-hour movie generation.
 Generates the Show Bible (characters, visual rules, voice assignments) and
 breaks the movie into a 3-act structure with multi-shot scenes.
+
+Now includes content_type routing and professional editing strategy to drive
+all downstream agents via StyleProfiles.
 """
 
 import json
 import logging
 from anthropic import AsyncAnthropic
 from app.config import settings
+from app.services.style_profiles import get_style_profile, get_profile_summary
 
 logger = logging.getLogger(__name__)
 
@@ -15,17 +19,32 @@ DIRECTOR_SYSTEM_PROMPT = """You are an elite Hollywood Director and Showrunner A
 Your job is to take a user's prompt and output a comprehensive Show Bible,
 3-Act Structure, and detailed Scene Breakdown suitable for autonomous AI generation.
 
+IMPORTANT: You must also select the correct content_type and editing_strategy
+to guide the pacing, audio mixing, and visual style of the final edit.
+
+Available content types and their editing profiles:
+{profile_summary}
+
 Output ONLY valid JSON with this structure:
-{
-  "show_bible": {
+{{
+  "show_bible": {{
     "title": "Project Title",
     "logline": "A one-sentence summary of the movie",
     "genre": "drama/comedy/thriller/sci-fi/horror/documentary/etc",
+    "content_type": "reel|youtube|podcast|documentary|corporate|cinematic",
     "visual_style": "Describe the overall lighting, camera style, color palette, and mood.",
     "color_palette": ["#1a1a2e", "#16213e", "#0f3460", "#e94560"],
     "rules": ["Rule 1: consistent warm lighting", "Rule 2: slow deliberate camera movements"],
+    "editing_strategy": {{
+      "pacing_notes": "Fast cuts during action, slow breathing shots in quiet moments",
+      "music_strategy": "Ambient electronic score building through acts, silence in pivotal moments",
+      "caption_strategy": "Kinetic word-by-word captions for all dialog, highlight character names",
+      "broll_strategy": "Insert relevant visuals during abstract concepts and scene transitions",
+      "transition_palette": ["cut", "dissolve", "fade"],
+      "target_cuts_per_minute": 8
+    }},
     "characters": [
-      {
+      {{
         "char_id": "char_1",
         "name": "Alex",
         "description": "Young professional in their 30s, short brown hair, wearing a red jacket. Highly detailed visual description for consistent AI generation.",
@@ -33,81 +52,113 @@ Output ONLY valid JSON with this structure:
         "arc": "Starts uncertain, grows confident through challenges, achieves self-acceptance",
         "voice_assignment": null,
         "voice_description": "warm male voice, mid-30s, slight rasp"
-      }
+      }}
     ]
-  },
+  }},
   "acts": [
-    {
+    {{
       "act_number": 1,
       "title": "Setup",
       "description": "Introduction to the world and characters",
       "scenes": [
-        {
+        {{
           "scene_number": 1,
           "description": "Opening: Establishing shot of the city at dawn",
           "location": "Cityscape, rooftop view",
           "characters_present": ["char_1"],
           "dialog": [
-            {
+            {{
               "speaker": "char_1",
               "line": "I never thought I'd end up here.",
-              "direction": "looking out over the city, reflective tone"
-            }
+              "direction": "looking out over the city, reflective tone",
+              "emotion": "reflective"
+            }}
           ],
+          "voiceover": {{
+            "text": "Optional narration over the scene",
+            "voice_style": "narrator"
+          }},
+          "audio": {{
+            "type": "ambient",
+            "description": "Soft city morning sounds, distant traffic",
+            "volume": 0.4
+          }},
+          "text_overlays": [
+            {{
+              "content": "CHAPTER 1",
+              "role": "title",
+              "start_offset": 0.5,
+              "duration": 3,
+              "position": "center"
+            }}
+          ],
+          "broll_hints": ["cityscape", "sunrise", "urban morning"],
           "shots": [
-            {
+            {{
               "type": "establishing",
               "description": "Wide aerial shot of city skyline at golden hour",
               "duration": 5,
-              "character_focus": null
-            },
-            {
+              "character_focus": null,
+              "camera": {{"movement": "slow_zoom_in", "angle": "high"}}
+            }},
+            {{
               "type": "medium",
               "description": "Medium shot of Alex on rooftop, wind in hair",
               "duration": 4,
-              "character_focus": "char_1"
-            },
-            {
+              "character_focus": "char_1",
+              "camera": {{"movement": "static", "angle": "eye_level"}}
+            }},
+            {{
               "type": "close-up",
               "description": "Close-up of Alex's face, eyes looking at horizon",
               "duration": 3,
-              "character_focus": "char_1"
-            }
+              "character_focus": "char_1",
+              "camera": {{"movement": "slow_push", "angle": "eye_level"}}
+            }}
           ],
           "estimated_duration_seconds": 12,
           "tension_level": 3,
-          "mood": "contemplative"
-        }
+          "mood": "contemplative",
+          "transition_in": "fade",
+          "transition_out": "dissolve"
+        }}
       ]
-    },
-    {
+    }},
+    {{
       "act_number": 2,
       "title": "Confrontation",
       "description": "Rising action, conflicts, and challenges",
       "scenes": []
-    },
-    {
+    }},
+    {{
       "act_number": 3,
       "title": "Resolution",
       "description": "Climax and resolution",
       "scenes": []
-    }
+    }}
   ],
-  "pacing": {
+  "pacing": {{
     "tension_curve": [3, 4, 5, 6, 7, 8, 9, 10, 7, 5, 3],
     "act_1_percentage": 25,
     "act_2_percentage": 50,
-    "act_3_percentage": 25
-  }
-}
+    "act_3_percentage": 25,
+    "energy_curve": [4, 5, 6, 7, 8, 9, 10, 8, 6, 4, 5]
+  }}
+}}
 
 KEY REQUIREMENTS:
-- The scene plan MUST contain enough scenes to roughly cover the requested duration
+- ALWAYS set content_type from: reel, youtube, podcast, documentary, corporate, cinematic
+- The editing_strategy MUST match the content_type — reels need fast cuts, podcasts need slow pacing
+- Scene plan MUST contain enough scenes to roughly cover the requested duration
 - For a 1-hour movie: 15-30 scenes across 3 acts
-- Each scene should have 2-5 shots
-- Dialog must have speaker attribution and stage directions
+- Each scene should have 2-5 shots with camera movement and angle
+- Include broll_hints for scenes where B-roll would strengthen the visual
+- Dialog must have speaker attribution, stage directions, and emotion
 - Every character needs a detailed visual description for AI image consistency
 - Include voice_description for each character (age, gender, tone, accent)
+- Include transition_in/transition_out per scene (cut, fade, dissolve, wipe, zoom, glitch)
+- Include audio spec per scene (ambient, sfx descriptions)
+- Include voiceover when narration is needed
 - Tension levels 1-10 to guide pacing
 - shot types: establishing, wide, medium, close-up, extreme-close-up, over-the-shoulder, point-of-view, reaction, insert
 """
@@ -123,10 +174,15 @@ class DirectorAgent:
         """Generate the Show Bible and Scene Plan from the query + Q&A answers."""
         query = state.get("original_query", "Create a cinematic video")
 
+        # Inject available style profiles into the system prompt
+        system_prompt = DIRECTOR_SYSTEM_PROMPT.format(
+            profile_summary=get_profile_summary()
+        )
+
         response = await self.client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=16384,
-            system=DIRECTOR_SYSTEM_PROMPT,
+            system=system_prompt,
             messages=[{
                 "role": "user",
                 "content": f"Create the Show Bible and Scene Breakdown for the following request:\n\nQuery: {query}\n\nContext: {json.dumps(state.get('clarified_context', {}))}"
@@ -166,6 +222,10 @@ class DirectorAgent:
         for char in show_bible.get("characters", []):
             character_profiles[char["char_id"]] = char
 
+        # Resolve style profile from content_type
+        content_type = show_bible.get("content_type", "youtube")
+        style_profile = get_style_profile(content_type)
+
         return {
             **state,
             "show_bible": show_bible,
@@ -173,8 +233,11 @@ class DirectorAgent:
             "scene_plan": flat_scenes,
             "character_profiles": character_profiles,
             "pacing": director_plan.get("pacing", {}),
+            "content_type": content_type,
+            "style_profile": style_profile.to_dict(),
+            "editing_strategy": show_bible.get("editing_strategy", {}),
             "status": "director_complete",
             "messages": state.get("messages", []) + [
-                {"role": "agent", "content": f"Director has created the Show Bible with {len(character_profiles)} characters and broken the movie into {len(acts)} acts with {len(flat_scenes)} scenes."}
+                {"role": "agent", "content": f"Director has created the Show Bible with {len(character_profiles)} characters and broken the movie into {len(acts)} acts with {len(flat_scenes)} scenes. Content type: {content_type}."}
             ]
         }

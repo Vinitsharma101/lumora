@@ -38,12 +38,12 @@ export function Header() {
 					<Link href="/" className="flex items-center gap-2.5">
 						<Image
 							src={DEFAULT_LOGO_URL}
-							alt="GraceCut Logo"
+							alt="Grace Studio Logo"
 							className="invert dark:invert-0"
 							width={28}
 							height={28}
 						/>
-						<span className="text-sm font-semibold">GraceCut</span>
+						<span className="text-sm font-semibold">Grace Studio</span>
 					</Link>
 					<nav className="hidden items-center gap-1 md:flex">
 						{links.map((link) => (

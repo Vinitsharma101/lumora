@@ -6,13 +6,13 @@ import { getPosts } from "@/lib/blog/query";
 import type { Post } from "@/types/blog";
 
 export const metadata: Metadata = {
-	title: "Blog - GraceCut",
+	title: "Blog - Grace Studio",
 	description:
-		"Read the latest news and updates about GraceCut, the AI-powered video editing platform.",
+		"Read the latest news and updates about Grace Studio, the AI-powered video editing platform.",
 	openGraph: {
-		title: "Blog - GraceCut",
+		title: "Blog - Grace Studio",
 		description:
-			"Read the latest news and updates about GraceCut, the AI-powered video editing platform.",
+			"Read the latest news and updates about Grace Studio, the AI-powered video editing platform.",
 		type: "website",
 	},
 };
@@ -24,7 +24,7 @@ export default async function BlogPage() {
 	return (
 		<BasePage
 			title="Blog"
-			description="Read the latest news and updates about GraceCut, the AI-powered video editing platform."
+			description="Read the latest news and updates about Grace Studio, the AI-powered video editing platform."
 		>
 			<div className="flex flex-col">
 				{data.posts.map((post) => (

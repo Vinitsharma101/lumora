@@ -130,9 +130,16 @@ class GoogleAIProvider:
         prompt: str,
         aspect_ratio: str = "16:9",
         count: int = 1,
+        negative_prompt: str | None = None,
     ) -> dict:
         """Generate image using Google Imagen for storyboards."""
         client = await get_http_client()
+        parameters: dict = {
+            "sampleCount": count,
+            "aspectRatio": aspect_ratio,
+        }
+        if negative_prompt:
+            parameters["negativePrompt"] = negative_prompt
         response = await client.post(
             f"{self._generative_url}/models/imagen-3.0-generate-002:predict",
             headers={
@@ -141,14 +148,53 @@ class GoogleAIProvider:
             },
             json={
                 "instances": [{"prompt": prompt}],
-                "parameters": {
-                    "sampleCount": count,
-                    "aspectRatio": aspect_ratio,
-                },
+                "parameters": parameters,
             },
         )
         response.raise_for_status()
         return response.json()
+
+    async def edit_image(
+        self,
+        image_url: str,
+        prompt: str,
+    ) -> dict:
+        """Edit an image using natural language via Imagen editing."""
+        client = await get_http_client()
+
+        img_response = await client.get(image_url)
+        img_response.raise_for_status()
+        image_b64 = base64.b64encode(img_response.content).decode()
+
+        response = await client.post(
+            f"{self._generative_url}/models/imagen-3.0-capability-001:predict",
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.api_key,
+            },
+            json={
+                "instances": [
+                    {
+                        "prompt": prompt,
+                        "image": {"bytesBase64Encoded": image_b64},
+                    }
+                ],
+                "parameters": {"editMode": "EDIT_MODE_INPAINT_INSERTION"},
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        predictions = data.get("predictions", [])
+        images_b64 = [
+            p["bytesBase64Encoded"]
+            for p in predictions
+            if "bytesBase64Encoded" in p
+        ]
+        return {
+            "provider": "google_imagen",
+            "images_b64": images_b64,
+            "count": len(images_b64),
+        }
 
     async def remove_background(self, image_url: str) -> dict:
         """Remove background from an image using Imagen editing."""

@@ -71,6 +71,7 @@ export interface MovieState {
 		options: string[];
 	}>;
 	reviewScore: number | null;
+	assembledTimeline: Record<string, unknown> | null;
 	error: string | null;
 
 	// Polling
@@ -113,6 +114,7 @@ const initialState: MovieState = {
 	messages: [],
 	pendingQuestions: [],
 	reviewScore: null,
+	assembledTimeline: null,
 	error: null,
 	isPolling: false,
 	pollIntervalMs: 3000,
@@ -259,7 +261,7 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					checkpoint: "review",
+					checkpoint: "final_review",
 					approved: true,
 					feedback,
 				}),
@@ -290,6 +292,7 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 				const apiStatus = data.status;
 				if (apiStatus === "completed") {
 					newState.status = "completed";
+					newState.assembledTimeline = data.assembled_timeline ?? null;
 					get().stopPolling();
 				} else if (apiStatus === "failed") {
 					newState.status = "failed";
@@ -298,8 +301,27 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 					newState.status = "paused_checkpoint";
 				} else if (apiStatus === "waiting_approval") {
 					newState.status = "waiting_approval";
+					newState.costEstimate = data.cost_estimate ? {
+						totalEstimatedUsd: data.cost_estimate.total_estimated_usd ?? 0,
+						breakdown: data.cost_estimate.breakdown ?? {},
+						counts: data.cost_estimate.counts ?? { scenes: 0, shots: 0, dialogLines: 0, characters: 0 },
+					} : null;
 				} else {
 					newState.status = "processing";
+				}
+
+				// Update acts progress
+				if (data.acts_progress) {
+					const actsProgress: Record<string, ActProgress> = {};
+					for (const [key, value] of Object.entries(data.acts_progress)) {
+						const actData = value as Record<string, unknown>;
+						actsProgress[key] = {
+							status: (actData.status as string) || "processing",
+							scenesTotal: (actData.scenes_total as number) || 0,
+							scenesCompleted: (actData.scenes_completed as number) || 0,
+						};
+					}
+					newState.actsProgress = actsProgress;
 				}
 
 				// Parse scenes from plan

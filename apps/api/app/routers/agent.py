@@ -68,11 +68,22 @@ async def execute_agent(
         user_id=user_id,
     )
 
-    session_id = await orchestrator.start(
-        query=request.query,
-        context=request.context,
-        media_assets=request.media_asset_ids,
-    )
+    try:
+        session_id = await orchestrator.start(
+            query=request.query,
+            context=request.context,
+            media_assets=request.media_asset_ids,
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to start agent session for project {project_id}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start agent session: {str(e)}. "
+            "Check that the database is configured and the agent_sessions table exists.",
+        )
 
     return {
         "session_id": session_id,
@@ -171,8 +182,10 @@ async def approve_checkpoint(session_id: str, request: AgentApproveRequest):
         await orchestrator.save_state()
 
     elif request.checkpoint == "final_review":
-        orchestrator.state["status"] = "completed"
+        orchestrator.state["status"] = "processing"
         await orchestrator.save_state()
+        pool = await get_arq_pool()
+        await pool.enqueue_job("process_movie_assembly", session_id)
 
     return {"status": "approved", "checkpoint": request.checkpoint}
 

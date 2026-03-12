@@ -44,7 +44,7 @@ export function Community() {
 					Platform Capabilities
 				</h2>
 				<p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-lg">
-					GraceCut combines powerful editing tools with an agentic AI
+					Grace Studio combines powerful editing tools with an agentic AI
 					pipeline to transform your creative workflow.
 				</p>
 			</div>

@@ -41,8 +41,7 @@ async def search_sounds(
     # category=music for songs and short-duration videos for sound effects.
     if is_songs:
         params["category"] = "music"
-    else:
-        params["category"] = "music"
+    # else: no category — query "sound effect" + duration filter handles SFX
 
     client = await get_http_client()
     url = "https://pixabay.com/api/videos/"
@@ -84,16 +83,13 @@ async def search_sounds(
 
 def _transform_pixabay_hit(hit: dict) -> dict:
     videos = hit.get("videos", {})
-    # Prefer tiny/small for audio-like usage (smaller download)
-    video_file = videos.get("tiny") or videos.get("small") or videos.get("medium") or {}
-    download_url = video_file.get("url", "")
+    # For download/timeline: prefer small or medium quality
+    download_file = videos.get("small") or videos.get("medium") or videos.get("tiny") or {}
+    download_url = download_file.get("url", "")
 
-    picture_id = hit.get("picture_id", "")
-    preview_url = (
-        f"https://i.vimeocdn.com/video/{picture_id}_295x166.jpg"
-        if picture_id
-        else ""
-    )
+    # For preview playback: use tiny/small video URL (not an image thumbnail)
+    preview_file = videos.get("tiny") or videos.get("small") or download_file
+    preview_url = preview_file.get("url", "")
 
     tags = hit.get("tags", "")
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if isinstance(tags, str) else tags
@@ -107,7 +103,7 @@ def _transform_pixabay_hit(hit: dict) -> dict:
         "previewUrl": preview_url,
         "downloadUrl": download_url,
         "duration": hit.get("duration", 0),
-        "filesize": video_file.get("size", 0),
+        "filesize": download_file.get("size", 0),
         "type": "video",
         "channels": 0,
         "bitrate": 0,

@@ -467,12 +467,26 @@ export async function generateTextToImage({
 	width,
 	height,
 	model,
+	provider,
+	aspectRatio,
+	numImages,
+	negativePrompt,
+	stylePreset,
+	styleReferenceUrls,
+	seed,
 	projectId,
 }: {
 	prompt: string;
 	width?: number;
 	height?: number;
 	model?: "schnell" | "dev";
+	provider?: "replicate" | "google_imagen" | "openai";
+	aspectRatio?: "1:1" | "16:9" | "9:16" | "4:3" | "3:4";
+	numImages?: number;
+	negativePrompt?: string;
+	stylePreset?: string;
+	styleReferenceUrls?: string[];
+	seed?: number;
 	projectId?: string;
 }): Promise<AIJobResponse> {
 	const response = await apiFetch("/api/ai/video/text-to-image", {
@@ -483,6 +497,40 @@ export async function generateTextToImage({
 			width,
 			height,
 			model,
+			provider,
+			aspect_ratio: aspectRatio,
+			num_images: numImages,
+			negative_prompt: negativePrompt || undefined,
+			style_preset: stylePreset || undefined,
+			style_reference_urls:
+				styleReferenceUrls && styleReferenceUrls.length > 0
+					? styleReferenceUrls
+					: undefined,
+			seed: seed ?? undefined,
+			project_id: projectId,
+		}),
+	});
+	return jsonOrThrow<AIJobResponse>(response);
+}
+
+export async function editImage({
+	sourceImageUrl,
+	editPrompt,
+	provider,
+	projectId,
+}: {
+	sourceImageUrl: string;
+	editPrompt: string;
+	provider?: "replicate" | "google_imagen" | "openai";
+	projectId?: string;
+}): Promise<AIJobResponse> {
+	const response = await apiFetch("/api/ai/video/edit-image", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			source_image_url: sourceImageUrl,
+			edit_prompt: editPrompt,
+			provider,
 			project_id: projectId,
 		}),
 	});

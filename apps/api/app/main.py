@@ -27,7 +27,7 @@ async def lifespan(application: FastAPI):
     await close_redis()
 
 
-app = FastAPI(title="GraceCut API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Grace Studio API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

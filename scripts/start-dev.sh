@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# OpenCut Development Server Startup Script
+# Grace Studio Development Server Startup Script
 # Starts all required services for local development
 
 set -e
 
-echo "🚀 Starting OpenCut Development Services..."
+echo "🚀 Starting Grace Studio Development Services..."
 echo ""
 
 # Colors for output
@@ -32,7 +32,7 @@ sleep 5
 
 # Check database health
 echo "📋 Checking database connection..."
-until docker compose exec db pg_isready -U opencut > /dev/null 2>&1; do
+until docker compose exec db pg_isready -U grace-studio > /dev/null 2>&1; do
     echo "⏳ Database not ready yet..."
     sleep 2
 done

@@ -28,7 +28,7 @@ import { usePropertyDraft } from "./hooks/use-property-draft";
 import { TransformSection, BlendingSection } from "./sections";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TextFontIcon } from "@hugeicons/core-free-icons";
-import { OcTextHeightIcon, OcTextWidthIcon } from "@gracecut/ui/icons";
+import { OcTextHeightIcon, OcTextWidthIcon } from "@grace-studio/ui/icons";
 
 function createOffsetConverter({
 	defaultValue,

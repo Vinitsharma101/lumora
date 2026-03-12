@@ -10,13 +10,13 @@ import { Separator } from "@/components/ui/separator";
 import { SOCIAL_LINKS } from "@/constants/site-constants";
 
 export const metadata: Metadata = {
-	title: "Privacy Policy - GraceCut",
+	title: "Privacy Policy - Grace Studio",
 	description:
-		"Learn how GraceCut handles your data and privacy. Our commitment to protecting your information while you edit videos.",
+		"Learn how Grace Studio handles your data and privacy. Our commitment to protecting your information while you edit videos.",
 	openGraph: {
-		title: "Privacy Policy - GraceCut",
+		title: "Privacy Policy - Grace Studio",
 		description:
-			"Learn how GraceCut handles your data and privacy. Our commitment to protecting your information while you edit videos.",
+			"Learn how Grace Studio handles your data and privacy. Our commitment to protecting your information while you edit videos.",
 		type: "website",
 	},
 };
@@ -65,10 +65,10 @@ export default function PrivacyPage() {
 						<p className="mt-4">
 							Questions? Email us at{" "}
 							<a
-								href="mailto:support@gracecut.app"
+								href="mailto:support@gracestudio.app"
 								className="text-primary hover:underline"
 							>
-								support@gracecut.app
+								support@gracestudio.app
 							</a>
 						</p>
 					</AccordionContent>
@@ -172,7 +172,7 @@ export default function PrivacyPage() {
 						Databuddy
 					</a>{" "}
 					for completely anonymized and non-invasive analytics to understand how
-					people use GraceCut.
+					people use Grace Studio.
 				</p>
 				<p>
 					This helps us improve the editor, but we never collect personal
@@ -197,7 +197,7 @@ export default function PrivacyPage() {
 
 			<section className="flex flex-col gap-3">
 				<h2 className="text-2xl font-semibold">Third-Party Services</h2>
-				<p>GraceCut integrates with these services:</p>
+				<p>Grace Studio integrates with these services:</p>
 				<ul className="list-disc space-y-2 pl-6">
 					<li>
 						<strong>Google OAuth:</strong> For optional Google sign-in (governed
@@ -229,10 +229,10 @@ export default function PrivacyPage() {
 				<p>
 					Email us at{" "}
 					<a
-						href="mailto:support@gracecut.app"
+						href="mailto:support@gracestudio.app"
 						className="text-primary hover:underline"
 					>
-						support@gracecut.app
+						support@gracestudio.app
 					</a>
 					, or reach out on{" "}
 					<a

@@ -26,6 +26,7 @@ from app.schemas.ai_video import (
     AIJobResponse,
     AIJobStatusResponse,
     BackgroundRemoveRequest,
+    ImageEditRequest,
     ImageToVideoRequest,
     MediaUnderstandRequest,
     ScriptToScenesRequest,
@@ -286,7 +287,7 @@ async def text_to_image(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Generate an image from a text prompt using FLUX models via Replicate."""
+    """Generate images from a text prompt using FLUX, Imagen, or OpenAI."""
     await check_rate_limit(request)
 
     job = await create_ai_job(
@@ -299,12 +300,52 @@ async def text_to_image(
             "height": body.height,
             "model": body.model,
             "style": body.style,
+            "provider": body.provider,
+            "aspect_ratio": body.aspect_ratio,
+            "num_images": body.num_images,
+            "negative_prompt": body.negative_prompt,
+            "style_preset": body.style_preset,
+            "style_reference_urls": body.style_reference_urls,
+            "seed": body.seed,
         },
         project_id=body.project_id,
-        provider="replicate",
+        provider=body.provider,
     )
 
     await enqueue_ai_job(job.id, "text_to_image")
+
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
+    )
+
+
+@router.post("/api/ai/video/edit-image", response_model=AIJobResponse)
+async def edit_image(
+    body: ImageEditRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit an existing image using natural language via AI providers."""
+    await check_rate_limit(request)
+
+    job = await create_ai_job(
+        db=db,
+        user_id=user.id,
+        job_type="edit_image",
+        input_data={
+            "source_image_url": body.source_image_url,
+            "edit_prompt": body.edit_prompt,
+            "provider": body.provider,
+        },
+        project_id=body.project_id,
+        provider=body.provider,
+    )
+
+    await enqueue_ai_job(job.id, "edit_image")
 
     return AIJobResponse(
         job_id=job.id,
@@ -536,6 +577,10 @@ async def get_ai_job_status(
                     job.output_data = {"video_url": upstream.get("video_url")}
                     job.completed_at = datetime.now(timezone.utc)
                     await db.commit()
+
+            # openai and google_imagen image jobs complete synchronously in the
+            # worker, so no upstream polling is needed for those providers.
+
         except Exception:
             pass  # Don't fail status check if provider check fails
 

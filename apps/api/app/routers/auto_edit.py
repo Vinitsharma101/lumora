@@ -151,6 +151,8 @@ async def generate_captions(
             "video_url": body.video_url,
             "language": body.language,
             "style": body.style,
+            "canvas_width": body.canvas_width,
+            "canvas_height": body.canvas_height,
         },
         project_id=body.project_id,
         provider="replicate",

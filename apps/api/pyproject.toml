@@ -1,7 +1,7 @@
 [project]
-name = "gracecut-api"
+name = "grace-studio-api"
 version = "0.2.0"
-description = "GraceCut FastAPI backend — agentic AI video platform"
+description = "Grace Studio FastAPI backend — agentic AI video platform"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",

@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useEditor } from "@/hooks/use-editor";
+import { processMediaAssets } from "@/lib/media/processing";
 import {
 	Image02Icon,
 	Video01Icon,
@@ -269,9 +270,24 @@ function StockMediaCard({ item }: { item: StockMediaItem }) {
 				throw new Error("No active project");
 			}
 
+			const processedAssets = await processMediaAssets({ files: [file] });
+			if (processedAssets.length === 0) {
+				throw new Error("Failed to process stock media");
+			}
+			const processed = processedAssets[0];
+
 			await editor.media.addMediaAsset({
 				projectId,
-				asset: { file, name, type: mediaType },
+				asset: {
+					file: processed.file,
+					name: processed.name,
+					type: processed.type,
+					url: processed.url,
+					thumbnailUrl: processed.thumbnailUrl,
+					width: processed.width,
+					height: processed.height,
+					duration: processed.duration,
+				},
 			});
 
 			toast.success(`Added ${mediaType} to media`);

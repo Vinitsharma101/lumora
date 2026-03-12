@@ -20,7 +20,6 @@ COST_PER_CALL = {
     "replicate_upscale": 0.15,
     "elevenlabs_tts_per_1k_chars": 0.30,
     "elevenlabs_sfx": 0.15,
-    "replicate_musicgen": 0.05,
     "claude_api_per_call": 0.05,
 }
 
@@ -30,11 +29,19 @@ def estimate_pipeline_cost(state: dict) -> dict:
 
     Analyzes the scene plan and returns a breakdown.
     """
-    scene_plan = state.get("scene_plan", [])
+    scene_plan_raw = state.get("scene_plan", {})
     show_bible = state.get("show_bible", {})
     acts = state.get("acts", [])
 
-    num_scenes = len(scene_plan)
+    # Normalize scene_plan — planning_agent produces {"scenes": [...], "resolution": {...}}
+    if isinstance(scene_plan_raw, dict):
+        scenes = scene_plan_raw.get("scenes", [])
+    elif isinstance(scene_plan_raw, list):
+        scenes = scene_plan_raw
+    else:
+        scenes = []
+
+    num_scenes = len(scenes)
     if not num_scenes:
         return {"total_estimated_usd": 0, "breakdown": {}}
 
@@ -43,9 +50,15 @@ def estimate_pipeline_cost(state: dict) -> dict:
     total_dialog_lines = 0
     total_dialog_chars = 0
 
-    for scene in scene_plan:
+    for scene in scenes:
         shots = scene.get("shots", [])
         total_shots += max(len(shots), 1)
+
+        # Planning agent uses "voiceover" with nested "text", not "dialog" with "line"
+        voiceover = scene.get("voiceover", {})
+        if voiceover and isinstance(voiceover, dict) and voiceover.get("text"):
+            total_dialog_lines += 1
+            total_dialog_chars += len(voiceover["text"])
 
         for dialog in scene.get("dialog", []):
             total_dialog_lines += 1
