@@ -165,6 +165,13 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                         duration=input_data.get("duration", 5),
                         aspect_ratio=input_data.get("aspect_ratio", "16:9"),
                     )
+                elif provider_name == "luma":
+                    from app.services.ai_video.replicate_provider import ReplicateProvider
+                    provider = ReplicateProvider()
+                    ai_result = await provider.text_to_video_luma(
+                        prompt=input_data["prompt"],
+                        aspect_ratio=input_data.get("aspect_ratio", "16:9"),
+                    )
                 elif provider_name == "replicate":
                     from app.services.ai_video.replicate_provider import ReplicateProvider
                     provider = ReplicateProvider()
@@ -190,6 +197,14 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                         image_url=input_data["image_url"],
                         prompt=input_data.get("prompt"),
                         duration=input_data.get("duration", 4),
+                    )
+                elif provider_name == "luma":
+                    from app.services.ai_video.replicate_provider import ReplicateProvider
+                    provider = ReplicateProvider()
+                    ai_result = await provider.image_to_video_luma(
+                        image_url=input_data["image_url"],
+                        prompt=input_data.get("prompt"),
+                        aspect_ratio=input_data.get("aspect_ratio", "16:9"),
                     )
                 else:
                     from app.services.ai_video.replicate_provider import ReplicateProvider
@@ -857,6 +872,29 @@ async def process_movie_director(ctx: dict, session_id: str) -> dict:
             return {"status": "waiting_approval", "cost_estimate": cost_estimate}
 
         await orchestrator.save_state()
+
+    # Storyboard approval checkpoint — pause for user to review the show bible
+    if not orchestrator.state.get("storyboard_approved"):
+        orchestrator.state["status"] = "waiting_storyboard_approval"
+        show_bible = orchestrator.state.get("show_bible", {})
+        title = show_bible.get("title", "Untitled")
+        acts_count = len(orchestrator.state.get("acts", []))
+        scenes_count = len(orchestrator.state.get("scene_plan", []))
+        orchestrator.state["messages"] = orchestrator.state.get("messages", []) + [
+            {
+                "role": "agent",
+                "content": (
+                    f"Storyboard ready: \"{title}\" — {acts_count} acts, {scenes_count} scenes. "
+                    "Review the storyboard and approve to begin generation."
+                ),
+            }
+        ]
+        await orchestrator.save_state()
+        return {
+            "status": "waiting_storyboard_approval",
+            "acts": acts_count,
+            "scenes": scenes_count,
+        }
 
     acts = orchestrator.state.get("acts", [])
     scene_plan = orchestrator.state.get("scene_plan", [])

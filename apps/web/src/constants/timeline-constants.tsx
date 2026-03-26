@@ -55,7 +55,6 @@ export const TIMELINE_CONSTANTS = {
 	ZOOM_ANCHOR_PLAYHEAD_THRESHOLD: 0.15,
 } as const;
 
-import type { ReactNode } from "react";
 
 export const DEFAULT_TIMELINE_VIEW_STATE: TTimelineViewState = {
 	zoomLevel: 1,

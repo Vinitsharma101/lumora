@@ -4,15 +4,37 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	removeSilence,
-	generateCaptions,
-	createShorts,
-	beatSync,
-	analyzeVideo,
-	getAIJobStatus,
-	type AIJobResponse,
-} from "@/lib/cloud-api";
+
+interface AIJobResponse {
+	jobId: string;
+	job_id: string;
+	status: string;
+	progress: number;
+	output_url?: string | null;
+	output_data?: Record<string, unknown> | null;
+	error_message?: string | null;
+}
+
+/** Call the Next.js /api/ai/auto-edit route */
+async function callAutoEditAPI(
+	action: string,
+	params: Record<string, unknown>,
+): Promise<AIJobResponse> {
+	const response = await fetch("/api/ai/auto-edit", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ action, ...params }),
+	});
+	if (!response.ok) throw new Error(`API error ${response.status}`);
+	return response.json();
+}
+
+/** Poll a job via /api/ai/jobs/[jobId] */
+async function pollJobStatus(jobId: string): Promise<AIJobResponse> {
+	const response = await fetch(`/api/ai/jobs/${jobId}`);
+	if (!response.ok) throw new Error(`Job poll failed: ${response.status}`);
+	return response.json();
+}
 
 type AutoEditMode =
 	| "analyze"
@@ -45,14 +67,14 @@ export function AutoEditView() {
 		({ jobId, index }: { jobId: string; index: number }) => {
 			const poll = async () => {
 				try {
-					const status = await getAIJobStatus({ jobId });
+					const status = await pollJobStatus(jobId);
 					setJobs((previous) =>
 						previous.map((job, idx) =>
 							idx === index
 								? {
 										...job,
 										status: status.status,
-										progress: status.progress,
+										progress: status.progress ?? 0,
 										result: status,
 									}
 								: job,
@@ -79,7 +101,7 @@ export function AutoEditView() {
 			let response: AIJobResponse;
 
 			if (mode === "analyze") {
-				response = await analyzeVideo({
+				response = await callAutoEditAPI("analyze", {
 					videoUrl,
 					detectScenes: true,
 					detectSilence: true,
@@ -87,25 +109,25 @@ export function AutoEditView() {
 					transcribe: true,
 				});
 			} else if (mode === "silence-remove") {
-				response = await removeSilence({
+				response = await callAutoEditAPI("silence-remove", {
 					videoUrl,
 					minSilenceDuration: minSilence,
 				});
 			} else if (mode === "captions") {
-				response = await generateCaptions({
+				response = await callAutoEditAPI("captions", {
 					videoUrl,
 					language,
 					style: captionStyle,
 				});
 			} else if (mode === "shorts") {
-				response = await createShorts({
+				response = await callAutoEditAPI("shorts", {
 					videoUrl,
 					maxDuration,
 					count: shortsCount,
 					aspectRatio: "9:16",
 				});
 			} else {
-				response = await beatSync({
+				response = await callAutoEditAPI("beat-sync", {
 					videoUrl,
 					musicUrl,
 				});
@@ -113,14 +135,14 @@ export function AutoEditView() {
 
 			const newIndex = jobs.length;
 			const tracker: JobTracker = {
-				jobId: response.job_id,
+				jobId: response.job_id ?? response.jobId,
 				type: mode,
 				status: response.status,
-				progress: response.progress,
+				progress: response.progress ?? 0,
 				result: null,
 			};
 			setJobs((previous) => [...previous, tracker]);
-			pollJob({ jobId: response.job_id, index: newIndex });
+			pollJob({ jobId: response.job_id ?? response.jobId, index: newIndex });
 		} catch (error) {
 			console.error("Auto-edit failed:", error);
 		} finally {
@@ -253,9 +275,7 @@ export function AutoEditView() {
 								min={1}
 								max={10}
 								value={shortsCount}
-								onChange={(event) =>
-									setShortsCount(Number(event.target.value))
-								}
+								onChange={(event) => setShortsCount(Number(event.target.value))}
 								className="h-8"
 							/>
 						</div>
@@ -290,10 +310,7 @@ export function AutoEditView() {
 					<h4 className="mb-2 text-xs font-semibold">Auto-Edit Jobs</h4>
 					<div className="space-y-2">
 						{jobs.map((job) => (
-							<div
-								key={job.jobId}
-								className="bg-muted rounded-md p-2 text-xs"
-							>
+							<div key={job.jobId} className="bg-muted rounded-md p-2 text-xs">
 								<div className="flex items-center justify-between">
 									<span className="font-medium">{job.type}</span>
 									<span

@@ -323,7 +323,7 @@ export async function generateTextToVideo({
 	provider?: string;
 	projectId?: string;
 }): Promise<AIJobResponse> {
-	const response = await apiFetch("/api/ai/text-to-video", {
+	const response = await apiFetch("/api/ai/video/text-to-video", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -350,7 +350,7 @@ export async function generateImageToVideo({
 	provider?: string;
 	projectId?: string;
 }): Promise<AIJobResponse> {
-	const response = await apiFetch("/api/ai/image-to-video", {
+	const response = await apiFetch("/api/ai/video/image-to-video", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -375,7 +375,7 @@ export async function generateScriptToScenes({
 	aspectRatio?: string;
 	projectId?: string;
 }): Promise<AIJobResponse> {
-	const response = await apiFetch("/api/ai/script-to-scenes", {
+	const response = await apiFetch("/api/ai/video/script-to-scenes", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -395,7 +395,7 @@ export async function removeBackground({
 	imageUrl: string;
 	projectId?: string;
 }): Promise<AIJobResponse> {
-	const response = await apiFetch("/api/ai/background-remove", {
+	const response = await apiFetch("/api/ai/video/background-remove", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -415,7 +415,7 @@ export async function upscaleImage({
 	scale?: number;
 	projectId?: string;
 }): Promise<AIJobResponse> {
-	const response = await apiFetch("/api/ai/upscale", {
+	const response = await apiFetch("/api/ai/video/upscale", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -438,7 +438,7 @@ export async function styleTransfer({
 	strength?: number;
 	projectId?: string;
 }): Promise<AIJobResponse> {
-	const response = await apiFetch("/api/ai/style-transfer", {
+	const response = await apiFetch("/api/ai/video/style-transfer", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -458,6 +458,42 @@ export async function getAIJobStatus({
 }): Promise<AIJobResponse> {
 	const response = await apiFetch(`/api/ai/jobs/${jobId}`);
 	return jsonOrThrow<AIJobResponse>(response);
+}
+
+export interface AIJobStatusResponse {
+	id: string;
+	job_type: string;
+	status: string;
+	progress: number;
+	error_message: string | null;
+	input_data: Record<string, unknown> | null;
+	output_data: Record<string, unknown> | null;
+	provider: string | null;
+	current_step: string | null;
+	chunks_total: number;
+	chunks_completed: number;
+	output_url: string | null;
+	created_at: string;
+	completed_at: string | null;
+}
+
+export async function listAIJobs({
+	projectId,
+	jobType,
+	status,
+}: {
+	projectId?: string;
+	jobType?: string;
+	status?: string;
+} = {}): Promise<AIJobStatusResponse[]> {
+	const params = new URLSearchParams();
+	if (projectId) params.set("project_id", projectId);
+	if (jobType) params.set("job_type", jobType);
+	if (status) params.set("status", status);
+	const query = params.toString();
+	const url = `/api/ai/jobs${query ? `?${query}` : ""}`;
+	const response = await apiFetch(url);
+	return jsonOrThrow<AIJobStatusResponse[]>(response);
 }
 
 // ── New AI Capabilities ──
@@ -721,7 +757,6 @@ export async function getAgentSessionStatus({
 	const response = await apiFetch(`/api/agent/status/${sessionId}`);
 	return jsonOrThrow<AgentSessionStatus>(response);
 }
-
 
 export async function analyzeVideo({
 	videoUrl,

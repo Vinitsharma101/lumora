@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
 
+    # Development mode — bypasses auth for local testing
+    DEV_MODE: bool = True
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000"
 

@@ -7,7 +7,6 @@
  */
 
 import type { EditorCore } from "@/core";
-import { BatchCommand } from "@/lib/commands";
 import { TracksSnapshotCommand } from "@/lib/commands/timeline";
 import type { TimelineTrack } from "@/types/timeline";
 import { generateUUID } from "@/utils/id";
@@ -17,7 +16,6 @@ import type {
 	EditPlan,
 	TimelineCommandUnion,
 	ValidationResult,
-	SessionStatus,
 } from "./types";
 
 /**

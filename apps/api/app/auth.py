@@ -4,6 +4,7 @@ Uses the same bcrypt hashes that Better Auth created, so existing users
 can sign in without any password migration.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -18,8 +19,11 @@ from app.config import settings
 from app.database import get_db
 from app.models import User
 
+logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
+security = HTTPBearer(auto_error=not settings.DEV_MODE)
+
+DEV_USER_ID = "dev-local-user"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -51,10 +55,40 @@ def decode_access_token(token: str) -> dict:
         ) from exc
 
 
+async def _get_or_create_dev_user(db: AsyncSession) -> User:
+    """Return a dev user for local development, creating one if needed."""
+    result = await db.execute(select(User).where(User.id == DEV_USER_ID))
+    user = result.scalar_one_or_none()
+    if user:
+        return user
+
+    now = datetime.now(timezone.utc)
+    user = User(
+        id=DEV_USER_ID,
+        name="Dev User",
+        email="dev@localhost",
+        email_verified=True,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    logger.info("Created dev user for local development")
+    return user
+
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    # Dev mode: skip auth when no token provided
+    if not credentials and settings.DEV_MODE:
+        return await _get_or_create_dev_user(db)
+
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     payload = decode_access_token(credentials.credentials)
     user_id = payload.get("sub")
     if not user_id:

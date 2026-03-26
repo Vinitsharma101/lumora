@@ -214,6 +214,14 @@ class AgentOrchestrator:
                 model.updated_at = datetime.now(timezone.utc)
                 await db.commit()
 
+        # Cache status snapshot in Redis for SSE streaming
+        try:
+            from app.routers.agent import cache_agent_status
+            status_snapshot = await self.get_status()
+            await cache_agent_status(self.session_id, status_snapshot)
+        except Exception:
+            pass
+
     async def submit_answer(self, question_id: str, value: str):
         """Submit a user answer and resume the ARQ pipeline."""
         await self.load_state()
@@ -241,6 +249,9 @@ class AgentOrchestrator:
             "status": self.state.get("status", "unknown"),
             "pending_questions": self.state.get("pending_questions", []),
             "scene_plan": self.state.get("scene_plan"),
+            "show_bible": self.state.get("show_bible"),
+            "acts": self.state.get("acts", []),
+            "character_profiles": self.state.get("character_profiles", {}),
             "generated_assets_count": len(self.state.get("generated_assets", [])),
             "assembled_timeline": self.state.get("assembled_timeline"),
             "review_score": self.state.get("review_score"),

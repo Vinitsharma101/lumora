@@ -7,7 +7,7 @@ import { useAIChat } from "@/hooks/use-ai-chat";
 import { AIChatToolStatus } from "./ai-chat-tool-status";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/utils/ui";
-import { Loader2, SparklesIcon, Image, Video, Music, FileIcon } from "lucide-react";
+import { Loader2, SparklesIcon, Video, Music, FileIcon } from "lucide-react";
 
 function FileAttachmentPreview({ files }: { files: AttachedFile[] }) {
 	if (!files || files.length === 0) return null;
@@ -21,6 +21,7 @@ function FileAttachmentPreview({ files }: { files: AttachedFile[] }) {
 							key={file.id}
 							className="relative overflow-hidden rounded-md border border-amber-500/20"
 						>
+							{/* biome-ignore lint/performance/noImgElement: dynamic user-uploaded URLs */}
 							<img
 								src={file.localUrl || file.uploadedUrl}
 								alt={file.name}
@@ -83,6 +84,7 @@ export function AIChatMessages() {
 	const { messages, isStreaming } = useAIChatStore();
 	const scrollRef = useRef<HTMLDivElement>(null);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll on message/stream changes
 	useEffect(() => {
 		if (scrollRef.current) {
 			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

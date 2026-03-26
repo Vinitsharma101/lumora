@@ -1,8 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { EditorCore } from "@/core";
-import { searchStickers as searchStickersFromProviders } from "@/lib/stickers";
+import {
+	searchStickers as searchStickersFromProviders,
+	browseStickers,
+} from "@/lib/stickers";
 import type { StickerSearchResult } from "@/lib/stickers";
+import type { StickerItem } from "@/lib/stickers";
 import { buildStickerElement } from "@/lib/timeline/element-utils";
 import { STICKER_CATEGORIES } from "@/constants/sticker-constants";
 import type { StickerCategory } from "@/types/stickers";
@@ -11,6 +15,13 @@ import { hasProvider } from "@/lib/stickers/registry";
 import { parseStickerId } from "@/lib/stickers/sticker-id";
 
 const MAX_RECENT_STICKERS = 50;
+
+export interface StickerCollection {
+	id: string;
+	label: string;
+	items: StickerItem[];
+}
+
 
 function isValidStickerId(value: unknown): value is string {
 	if (typeof value !== "string") {
@@ -63,10 +74,13 @@ interface StickersStore {
 	recentStickers: string[];
 	isSearching: boolean;
 	addingSticker: string | null;
+	collections: StickerCollection[];
+	isBrowseLoading: boolean;
 
 	setSearchQuery: ({ query }: { query: string }) => void;
 	setSelectedCategory: ({ category }: { category: StickerCategory }) => void;
 	searchStickers: ({ query }: { query: string }) => Promise<void>;
+	loadCollections: () => Promise<void>;
 	addStickerToTimeline: ({
 		stickerId,
 		name,
@@ -90,14 +104,90 @@ export const useStickersStore = create<StickersStore>()(
 
 			isSearching: false,
 			addingSticker: null,
+			collections: [],
+			isBrowseLoading: false,
 
 			setSearchQuery: ({ query }) => set({ searchQuery: query }),
 
-			setSelectedCategory: ({ category }) =>
+			setSelectedCategory: ({ category }) => {
 				set({
 					selectedCategory: category in STICKER_CATEGORIES ? category : "all",
 					viewMode: "browse",
-				}),
+					collections: [],
+				});
+			},
+
+			loadCollections: async () => {
+				const { selectedCategory, isBrowseLoading } = get();
+				if (isBrowseLoading) return;
+
+				set({ isBrowseLoading: true });
+				try {
+					registerDefaultStickerProviders({});
+
+					if (selectedCategory === "all") {
+						const categories: Array<{
+							id: StickerCategory;
+							label: string;
+						}> = [
+							{ id: "emoji", label: "Emoji" },
+							{ id: "icons", label: "Icons" },
+							{ id: "shapes", label: "Shapes" },
+							{ id: "flags", label: "Flags" },
+						];
+
+						const results = await Promise.allSettled(
+							categories.map(({ id }) =>
+								browseStickers({
+									category: id,
+									limit: 16,
+								}),
+							),
+						);
+
+						const loadedCollections: StickerCollection[] = [];
+						for (const [index, result] of results.entries()) {
+							if (
+								result.status === "fulfilled" &&
+								result.value.items.length > 0
+							) {
+								loadedCollections.push({
+									id: categories[index].id,
+									label: categories[index].label,
+									items: result.value.items,
+								});
+							}
+						}
+
+						set({ collections: loadedCollections });
+					} else {
+						const result = await browseStickers({
+							category: selectedCategory,
+							limit: 48,
+						});
+
+						set({
+							collections:
+								result.items.length > 0
+									? [
+											{
+												id: selectedCategory,
+												label:
+													STICKER_CATEGORIES[selectedCategory] ??
+													selectedCategory,
+												items: result.items,
+											},
+										]
+									: [],
+						});
+					}
+				} catch (error) {
+					console.error("Failed to load collections:", error);
+					set({ collections: [] });
+				} finally {
+					set({ isBrowseLoading: false });
+				}
+			},
 
 			searchStickers: async ({ query }: { query: string }) => {
 				if (!query.trim()) {

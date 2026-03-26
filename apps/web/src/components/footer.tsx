@@ -9,8 +9,8 @@ import {
 
 const footerLinks = {
 	Product: [
-		{ label: "Editor", href: "/projects" },
-		{ label: "AI Features", href: "/projects" },
+		{ label: "Editor", href: "/home" },
+		{ label: "AI Features", href: "/home" },
 		{ label: "Blog", href: "/blog" },
 	],
 	Resources: [

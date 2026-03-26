@@ -13,9 +13,6 @@ import { EffectsView } from "./views/effects";
 import { TransitionsView } from "./views/transitions";
 import { FiltersView } from "./views/filters";
 import { AdjustmentView } from "./views/adjustment";
-import { AIGenerateView } from "./views/ai-generate";
-import { AIImageView } from "./views/ai-image";
-import { AutoEditView } from "./views/auto-edit";
 import { CollaborateView } from "./views/collaborate";
 import { StockMediaView } from "./views/stock-media";
 
@@ -33,9 +30,6 @@ export function AssetsPanel() {
 		captions: <Captions />,
 		filters: <FiltersView />,
 		adjustment: <AdjustmentView />,
-		"ai-generate": <AIGenerateView />,
-		"ai-image": <AIImageView />,
-		"auto-edit": <AutoEditView />,
 		collaborate: <CollaborateView />,
 		settings: <SettingsView />,
 	};

@@ -11,11 +11,6 @@ import {
 } from "@/components/ui/collapsible";
 import { ChevronDown, Settings2 } from "lucide-react";
 import {
-	generateTextToImage,
-	editImage,
-	type AIJobResponse,
-} from "@/lib/cloud-api";
-import {
 	useImageGenStore,
 	STYLE_PRESETS,
 	type ImageProvider,
@@ -23,6 +18,42 @@ import {
 	type StylePresetKey,
 } from "@/stores/image-gen-store";
 import { StyleReferenceSection } from "./style-reference-section";
+
+/** Call the Next.js generate-image API route directly */
+async function generateImageViaNextAPI(params: {
+	prompt: string;
+	provider?: string;
+	aspectRatio?: string;
+	numImages?: number;
+	negativePrompt?: string;
+	stylePreset?: string;
+	styleReferenceUrls?: string[];
+	seed?: number;
+}): Promise<{
+	jobId: string;
+	status: string;
+	imageUrl?: string;
+	mockImageUrl?: string;
+}> {
+	const response = await fetch("/api/ai/generate-image", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			prompt: params.prompt,
+			provider: params.provider,
+			aspectRatio: params.aspectRatio,
+			numImages: params.numImages,
+			negativePrompt: params.negativePrompt,
+			stylePreset: params.stylePreset,
+			styleReferenceUrls: params.styleReferenceUrls,
+			seed: params.seed,
+		}),
+	});
+	if (!response.ok) {
+		throw new Error(`API error ${response.status}`);
+	}
+	return response.json();
+}
 
 const PROVIDERS: { value: ImageProvider; label: string }[] = [
 	{ value: "replicate", label: "FLUX" },
@@ -70,8 +101,7 @@ export function ControlsPanel() {
 
 	const selectedImage = images.find((img) => img.id === selectedImageId);
 	const isEditMode =
-		selectedImage?.status === "completed" &&
-		selectedImage.urls.length > 0;
+		selectedImage?.status === "completed" && selectedImage.urls.length > 0;
 
 	async function handleSubmit() {
 		if (!prompt.trim()) return;
@@ -81,28 +111,34 @@ export function ControlsPanel() {
 			addPromptToHistory(prompt.trim());
 
 			if (isEditMode && selectedImage) {
-				const response: AIJobResponse = await editImage({
-					sourceImageUrl: selectedImage.urls[0] as string,
-					editPrompt: prompt.trim(),
+				// Edit mode: send the source image URL along with the edit prompt
+				const response = await generateImageViaNextAPI({
+					prompt: `Edit: ${prompt.trim()} [source: ${selectedImage.urls[0]}]`,
 					provider: activeProvider,
 				});
 
+				const imageId = crypto.randomUUID();
+				const resolvedUrls =
+					response.status === "completed" && response.imageUrl
+						? [response.imageUrl]
+						: response.status === "mock" && response.mockImageUrl
+							? [response.mockImageUrl]
+							: [];
+
 				addImage({
-					id: crypto.randomUUID(),
+					id: imageId,
 					prompt: prompt.trim(),
 					provider: activeProvider,
-					status: "generating",
-					urls: [],
-					jobId: response.job_id,
+					status: resolvedUrls.length > 0 ? "completed" : "generating",
+					urls: resolvedUrls,
+					jobId: resolvedUrls.length > 0 ? null : response.jobId,
 					parentImageId: selectedImage.id,
 					errorMessage: null,
 					createdAt: Date.now(),
 				});
 			} else {
-				const styleRefUrls = styleReferenceImages.map(
-					(ref) => ref.url,
-				);
-				const response: AIJobResponse = await generateTextToImage({
+				const styleRefUrls = styleReferenceImages.map((ref) => ref.url);
+				const response = await generateImageViaNextAPI({
 					prompt: prompt.trim(),
 					provider: activeProvider,
 					aspectRatio,
@@ -114,13 +150,21 @@ export function ControlsPanel() {
 					seed: seed ?? undefined,
 				});
 
+				const imageId = crypto.randomUUID();
+				const resolvedUrls =
+					response.status === "completed" && response.imageUrl
+						? [response.imageUrl]
+						: response.status === "mock" && response.mockImageUrl
+							? [response.mockImageUrl]
+							: [];
+
 				addImage({
-					id: crypto.randomUUID(),
+					id: imageId,
 					prompt: prompt.trim(),
 					provider: activeProvider,
-					status: "generating",
-					urls: [],
-					jobId: response.job_id,
+					status: resolvedUrls.length > 0 ? "completed" : "generating",
+					urls: resolvedUrls,
+					jobId: resolvedUrls.length > 0 ? null : response.jobId,
 					parentImageId: null,
 					errorMessage: null,
 					createdAt: Date.now(),
@@ -171,11 +215,7 @@ export function ControlsPanel() {
 						{ASPECT_RATIOS.map((ratio) => (
 							<Button
 								key={ratio.value}
-								variant={
-									aspectRatio === ratio.value
-										? "default"
-										: "outline"
-								}
+								variant={aspectRatio === ratio.value ? "default" : "outline"}
 								size="sm"
 								className="h-7 px-2.5 text-xs"
 								onClick={() => setAspectRatio(ratio.value)}
@@ -194,9 +234,7 @@ export function ControlsPanel() {
 					</label>
 					<div className="flex flex-wrap gap-1.5">
 						<Button
-							variant={
-								stylePreset === null ? "default" : "outline"
-							}
+							variant={stylePreset === null ? "default" : "outline"}
 							size="sm"
 							className="h-7 px-2.5 text-xs"
 							onClick={() => setStylePreset(null)}
@@ -207,9 +245,7 @@ export function ControlsPanel() {
 						{PRESET_KEYS.map((key) => (
 							<Button
 								key={key}
-								variant={
-									stylePreset === key ? "default" : "outline"
-								}
+								variant={stylePreset === key ? "default" : "outline"}
 								size="sm"
 								className="h-7 px-2.5 text-xs"
 								onClick={() => setStylePreset(key)}
@@ -248,10 +284,7 @@ export function ControlsPanel() {
 				)}
 
 				{/* Advanced Settings */}
-				<Collapsible
-					open={advancedOpen}
-					onOpenChange={setAdvancedOpen}
-				>
+				<Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
 					<CollapsibleTrigger asChild>
 						<button
 							type="button"
@@ -272,9 +305,7 @@ export function ControlsPanel() {
 							</label>
 							<Textarea
 								value={negativePrompt}
-								onChange={(event) =>
-									setNegativePrompt(event.target.value)
-								}
+								onChange={(event) => setNegativePrompt(event.target.value)}
 								placeholder="Things to avoid in the image..."
 								className="min-h-[50px] max-h-[80px] resize-none text-xs"
 							/>
@@ -291,10 +322,7 @@ export function ControlsPanel() {
 								onChange={(event) =>
 									setSeed(
 										event.target.value
-											? Number.parseInt(
-													event.target.value,
-													10,
-												)
+											? Number.parseInt(event.target.value, 10)
 											: null,
 									)
 								}
@@ -305,23 +333,17 @@ export function ControlsPanel() {
 
 						{/* Provider */}
 						<div className="space-y-1">
-							<label className="text-xs text-muted-foreground">
-								Provider
-							</label>
+							<label className="text-xs text-muted-foreground">Provider</label>
 							<div className="flex gap-1">
 								{PROVIDERS.map((provider) => (
 									<Button
 										key={provider.value}
 										variant={
-											activeProvider === provider.value
-												? "default"
-												: "outline"
+											activeProvider === provider.value ? "default" : "outline"
 										}
 										size="sm"
 										className="h-7 flex-1 text-xs"
-										onClick={() =>
-											setProvider(provider.value)
-										}
+										onClick={() => setProvider(provider.value)}
 										type="button"
 									>
 										{provider.label}
@@ -339,11 +361,7 @@ export function ControlsPanel() {
 								{NUM_IMAGE_OPTIONS.map((count) => (
 									<Button
 										key={count}
-										variant={
-											numImages === count
-												? "default"
-												: "outline"
-										}
+										variant={numImages === count ? "default" : "outline"}
 										size="sm"
 										className="h-7 w-8 p-0 text-xs"
 										onClick={() => setNumImages(count)}

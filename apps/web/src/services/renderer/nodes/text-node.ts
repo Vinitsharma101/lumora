@@ -84,7 +84,7 @@ export class TextNode extends BaseNode<TextNodeParams> {
 		renderer,
 		time,
 		scaledFontSize,
-		lineHeightPx,
+		lineHeightPx: _lineHeightPx,
 		block,
 	}: {
 		renderer: CanvasRenderer;
@@ -107,7 +107,7 @@ export class TextNode extends BaseNode<TextNodeParams> {
 
 		const totalWidth = caption.wordTimings.reduce((sum, wt, index) => {
 			const wordWidth = renderer.context.measureText(wt.word).width;
-			return sum + wordWidth + (index < caption.wordTimings!.length - 1 ? spaceWidth : 0);
+			return sum + wordWidth + (index < (caption.wordTimings?.length ?? 0) - 1 ? spaceWidth : 0);
 		}, 0);
 
 		if (this.params.textAlign === "center") {

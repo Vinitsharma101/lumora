@@ -1,8 +1,21 @@
 import { useEffect, useRef } from "react";
-import { getAIJobStatus } from "@/lib/cloud-api";
 import { useImageGenStore } from "@/stores/image-gen-store";
 
 const POLL_INTERVAL = 2000;
+
+/** Poll the Next.js /api/ai/jobs/[jobId] route directly */
+async function fetchJobStatus(jobId: string): Promise<{
+	status: string;
+	output_data?: Record<string, unknown>;
+	output_url?: string;
+	error_message?: string;
+}> {
+	const response = await fetch(`/api/ai/jobs/${jobId}`);
+	if (!response.ok) {
+		throw new Error(`Job poll failed: ${response.status}`);
+	}
+	return response.json();
+}
 
 export function useImageGenPolling() {
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -39,10 +52,13 @@ export function useImageGenPolling() {
 
 			for (const img of generating) {
 				try {
-					const status = await getAIJobStatus({ jobId: img.jobId as string });
+					const status = await fetchJobStatus(img.jobId as string);
 
 					if (status.status === "completed") {
-						const outputData = status.output_data as Record<string, unknown> | null;
+						const outputData = status.output_data as Record<
+							string,
+							unknown
+						> | null;
 						const imageUrls =
 							(outputData?.image_urls as string[]) ??
 							(outputData?.output
@@ -52,11 +68,7 @@ export function useImageGenPolling() {
 								: []);
 						const outputUrl = status.output_url;
 						const urls =
-							imageUrls.length > 0
-								? imageUrls
-								: outputUrl
-									? [outputUrl]
-									: [];
+							imageUrls.length > 0 ? imageUrls : outputUrl ? [outputUrl] : [];
 
 						updateImage(img.id, {
 							status: "completed",

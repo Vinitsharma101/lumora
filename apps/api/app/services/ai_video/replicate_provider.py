@@ -40,10 +40,12 @@ MODEL_REGISTRY = {
         "wan-t2v": "wavespeedai/wan-2.1-t2v-480p",
         "svd": "stability-ai/stable-video-diffusion",
         "cogvideox": "fofr/cogvideox-5b",
+        "luma": "luma/dream-machine",
     },
     "image_to_video": {
         "svd": "stability-ai/stable-video-diffusion",
         "wan-i2v": "wavespeedai/wan-2.1-i2v-480p",
+        "luma": "luma/dream-machine",
     },
     "video_to_video": {
         "animate-diff": "lucataco/animate-diff",
@@ -153,6 +155,52 @@ class ReplicateProvider:
         self._ensure_client()
         model = "minimax/video-01"
         input_data = {"prompt": prompt, "num_frames": duration * 24}
+
+        if wait:
+            return await self.run_and_wait(model, input_data, timeout=600)
+
+        prediction = await asyncio.to_thread(
+            self.client.predictions.create,
+            model=model,
+            input=input_data,
+        )
+        return {
+            "provider": "replicate",
+            "prediction_id": prediction.id,
+            "status": prediction.status,
+        }
+
+    # ── Luma Dream Machine (Text-to-Video) ──
+
+    async def text_to_video_luma(self, prompt: str, aspect_ratio: str = "16:9", wait: bool = False) -> dict:
+        """Generate video from text using Luma Dream Machine on Replicate."""
+        self._ensure_client()
+        model = MODEL_REGISTRY["text_to_video"]["luma"]
+        input_data = {"prompt": prompt, "aspect_ratio": aspect_ratio}
+
+        if wait:
+            return await self.run_and_wait(model, input_data, timeout=600)
+
+        prediction = await asyncio.to_thread(
+            self.client.predictions.create,
+            model=model,
+            input=input_data,
+        )
+        return {
+            "provider": "replicate",
+            "prediction_id": prediction.id,
+            "status": prediction.status,
+        }
+
+    # ── Luma Dream Machine (Image-to-Video) ──
+
+    async def image_to_video_luma(self, image_url: str, prompt: str | None = None, aspect_ratio: str = "16:9", wait: bool = False) -> dict:
+        """Animate an image using Luma Dream Machine on Replicate."""
+        self._ensure_client()
+        model = MODEL_REGISTRY["image_to_video"]["luma"]
+        input_data: dict = {"start_image_url": image_url, "aspect_ratio": aspect_ratio}
+        if prompt:
+            input_data["prompt"] = prompt
 
         if wait:
             return await self.run_and_wait(model, input_data, timeout=600)

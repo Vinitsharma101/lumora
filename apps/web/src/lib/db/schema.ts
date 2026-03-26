@@ -80,6 +80,29 @@ export const aiChatMessages = pgTable("ai_chat_messages", {
 		.notNull(),
 }).enableRLS();
 
+// ── Projects ──
+
+export const projects = pgTable("projects", {
+	id: text("id").primaryKey(),
+	userId: text("user_id")
+		.notNull()
+		.references(() => users.id, { onDelete: "cascade" }),
+	name: text("name").notNull(),
+	type: text("type").notNull().default("video"),
+	thumbnail: text("thumbnail"),
+	duration: text("duration").notNull().default("0"),
+	settings: text("settings").notNull(),
+	scenes: text("scenes").notNull(),
+	currentSceneId: text("current_scene_id").notNull(),
+	version: text("version").notNull().default("1"),
+	createdAt: timestamp("created_at")
+		.$defaultFn(() => new Date())
+		.notNull(),
+	updatedAt: timestamp("updated_at")
+		.$defaultFn(() => new Date())
+		.notNull(),
+}).enableRLS();
+
 export const verifications = pgTable("verifications", {
 	id: text("id").primaryKey(),
 	identifier: text("identifier").notNull(),

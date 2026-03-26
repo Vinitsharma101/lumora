@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import { Composition, registerRoot } from "remotion";
 import { COMPOSITION_REGISTRY } from "./compositions";
 

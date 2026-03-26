@@ -4,12 +4,38 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	shareProject,
-	listCollaborators,
-	removeCollaborator,
-} from "@/lib/cloud-api";
 import { useEditor } from "@/hooks/use-editor";
+
+/** Share project via Next.js API */
+async function shareProjectAPI(projectId: string, email: string, role: string) {
+	const response = await fetch(`/api/projects/${projectId}`, {
+		method: "PUT",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ action: "share", email, role }),
+	});
+	if (!response.ok) throw new Error(`API error ${response.status}`);
+	return response.json();
+}
+
+/** List collaborators via Next.js API */
+async function listCollaboratorsAPI(_projectId: string) {
+	// For now, returns empty list since backend isn't available
+	return { collaborators: [] };
+}
+
+/** Remove collaborator via Next.js API */
+async function removeCollaboratorAPI(
+	projectId: string,
+	collaboratorId: string,
+) {
+	const response = await fetch(`/api/projects/${projectId}`, {
+		method: "PUT",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ action: "remove-collaborator", collaboratorId }),
+	});
+	if (!response.ok) throw new Error(`API error ${response.status}`);
+	return response.json();
+}
 
 interface Collaborator {
 	id: string;
@@ -32,7 +58,7 @@ export function CollaborateView() {
 		if (!projectId) return;
 		setIsLoading(true);
 		try {
-			const data = await listCollaborators({ projectId });
+			const data = await listCollaboratorsAPI(projectId);
 			setCollaborators(data.collaborators as unknown as Collaborator[]);
 			setHasLoaded(true);
 		} catch (error) {
@@ -46,7 +72,7 @@ export function CollaborateView() {
 		if (!projectId || !email) return;
 		setIsSharing(true);
 		try {
-			await shareProject({ projectId, email, role });
+			await shareProjectAPI(projectId, email, role);
 			setEmail("");
 			loadCollaborators();
 		} catch (error) {
@@ -60,7 +86,7 @@ export function CollaborateView() {
 		async ({ collaboratorId }: { collaboratorId: string }) => {
 			if (!projectId) return;
 			try {
-				await removeCollaborator({ projectId, collaboratorId });
+				await removeCollaboratorAPI(projectId, collaboratorId);
 				setCollaborators((previous) =>
 					previous.filter((collab) => collab.id !== collaboratorId),
 				);
@@ -172,9 +198,7 @@ export function CollaborateView() {
 										variant="ghost"
 										size="sm"
 										className="h-6 text-xs text-red-500"
-										onClick={() =>
-											handleRemove({ collaboratorId: collab.id })
-										}
+										onClick={() => handleRemove({ collaboratorId: collab.id })}
 										type="button"
 									>
 										Remove

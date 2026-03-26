@@ -22,12 +22,12 @@ export function Header() {
 			href: "/home",
 		},
 		{
-			label: "Image",
-			href: "/home?mode=image",
+			label: "Gallery",
+			href: "/gallery",
 		},
 		{
-			label: "Video",
-			href: "/home?mode=video",
+			label: "Generations",
+			href: "/generations",
 		},
 	];
 
@@ -71,7 +71,7 @@ export function Header() {
 						</Button>
 					</div>
 					<div className="hidden items-center gap-2 md:flex">
-						<Link href="/projects">
+						<Link href="/home">
 							<Button
 								variant="foreground"
 								className="h-8 px-4 text-sm"

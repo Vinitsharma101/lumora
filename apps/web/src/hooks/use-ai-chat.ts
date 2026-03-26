@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { useAIChatStore, type ChatMessage, type ToolCallStatus } from "@/stores/ai-chat-store";
+import { useAIChatStore, type ToolCallStatus } from "@/stores/ai-chat-store";
 import { useEditor } from "./use-editor";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { AI_TOOLS, executeToolCall } from "@/lib/ai/tools";
@@ -113,7 +113,7 @@ export function useAIChat() {
 								if (chunk.toolCall?.id && chunk.toolCall?.name && chunk.toolCall?.arguments) {
 									pendingToolCalls.push(chunk.toolCall as ToolCall);
 
-									const idx = toolStatuses.findIndex((t) => t.id === chunk.toolCall!.id);
+									const idx = toolStatuses.findIndex((t) => t.id === chunk.toolCall?.id);
 									if (idx >= 0) {
 										toolStatuses[idx] = {
 											...toolStatuses[idx],

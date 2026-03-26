@@ -13,7 +13,16 @@ from app.routers import transcription
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    """Startup/shutdown lifecycle: initialize Supabase buckets, clean up on shutdown."""
+    """Startup/shutdown lifecycle: create tables, initialize Supabase buckets, clean up on shutdown."""
+    # Auto-create tables for local dev (no-op if they already exist)
+    try:
+        from app.database import engine
+        from app.models import Base
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        pass  # DB may not be available in some environments
+
     try:
         from app.supabase_client import ensure_buckets_exist
         await ensure_buckets_exist()

@@ -27,7 +27,7 @@ export function Hero() {
 				</p>
 
 				<div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
-					<Link href="/projects">
+					<Link href="/home">
 						<Button
 							variant="foreground"
 							size="lg"

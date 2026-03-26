@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { FaDiscord } from "react-icons/fa6";
 import { ExportButton } from "./export-button";
 import { AskAIButton } from "./ask-ai-button";
+import { AIToolsPopover } from "./ai-tools-popover";
 import { ThemeToggle } from "../theme-toggle";
 import { DEFAULT_LOGO_URL, SOCIAL_LINKS } from "@/constants/site-constants";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ export function EditorHeader() {
 				<EditableProjectName />
 			</div>
 			<nav className="flex items-center gap-2">
+				<AIToolsPopover />
 				<AskAIButton />
 				<ExportButton />
 				<ThemeToggle />
@@ -62,7 +64,7 @@ function ProjectDropdown() {
 			console.error("Failed to prepare project exit:", error);
 		} finally {
 			editor.project.closeProject();
-			router.push("/projects");
+			router.push("/home");
 		}
 	};
 
@@ -94,7 +96,7 @@ function ProjectDropdown() {
 				await editor.project.deleteProjects({
 					ids: [activeProject.metadata.id],
 				});
-				router.push("/projects");
+				router.push("/home");
 			} catch (error) {
 				toast.error("Failed to delete project", {
 					description:

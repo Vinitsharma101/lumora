@@ -1,3 +1,4 @@
+import type { TimelineElement } from "@/types/timeline";
 import { useState, useMemo } from "react";
 import { useSelectionEditor } from "@/hooks/use-editor-domain";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -50,10 +51,10 @@ export function EffectsView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
 				const existingEffects = element?.effects || [];
 
-				if (existingEffects.some((e: any) => e.id === effect.id)) {
+				if (existingEffects.some((e: { id: string }) => e.id === effect.id)) {
 					return {
 						trackId: el.trackId,
 						elementId: el.elementId,
@@ -90,8 +91,8 @@ export function EffectsView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
-				const existingEffects: Array<{ id: string; type: string; intensity: number }> =
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
+				const existingEffects: Array<{ id: string; type: string; intensity?: number }> =
 					element?.effects || [];
 
 				return {
@@ -111,8 +112,8 @@ export function EffectsView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
-				const existingEffects: Array<{ id: string; type: string; intensity: number }> =
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
+				const existingEffects: Array<{ id: string; type: string; intensity?: number }> =
 					element?.effects || [];
 
 				return {
@@ -132,7 +133,7 @@ export function EffectsView() {
 	const getAppliedEffects = () => {
 		if (activeElements.length === 0) return [];
 		const track = editor.timeline.getTrackById({ trackId: activeElements[0].trackId });
-		const element = track?.elements.find((e) => e.id === activeElements[0].elementId) as any;
+		const element = track?.elements.find((e) => e.id === activeElements[0].elementId) as TimelineElement | undefined;
 		return (element?.effects || []) as Array<{
 			id: string;
 			type: string;
@@ -174,7 +175,7 @@ export function EffectsView() {
 
 			{/* Category Tabs */}
 			<div className="px-4 pb-2 flex gap-1 flex-wrap">
-				<button
+				<button type="button"
 					onClick={() => setSelectedCategory("all")}
 					className={cn(
 						"px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
@@ -187,7 +188,7 @@ export function EffectsView() {
 				</button>
 				{(Object.entries(EFFECT_CATEGORIES) as [EffectCategory, string][]).map(
 					([key, label]) => (
-						<button
+						<button type="button"
 							key={key}
 							onClick={() => setSelectedCategory(key)}
 							className={cn(
@@ -209,7 +210,7 @@ export function EffectsView() {
 					{filteredEffects.map((effect) => {
 						const isApplied = appliedEffects.some((e) => e.id === effect.id);
 						return (
-							<button
+							<button type="button"
 								key={effect.id}
 								onClick={() => handleApplyEffect(effect)}
 								title={effect.description}

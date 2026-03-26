@@ -1,5 +1,4 @@
 import { EditorCore } from "@/core";
-import { FONT_SIZE_SCALE_REFERENCE } from "@/constants/text-constants";
 import { apiFetch } from "@/lib/api-client";
 import {
 	buildTextElement,
@@ -8,6 +7,7 @@ import {
 import { processMediaAssets } from "@/lib/media/processing";
 import { serializeEditorContext } from "../context";
 import { AiEditingOrchestrator, getStyleProfileSummary } from "../editing";
+import { importAgentTimeline } from "../timeline-import";
 import type { ToolCall } from "../providers/types";
 
 export interface ToolExecutionResult {
@@ -1095,6 +1095,15 @@ export async function executeToolCall(
 				}
 
 				// Video or image — download and add to media track
+				const projectId = editor.project.getActive()?.metadata.id;
+				if (!projectId) {
+					return {
+						success: false,
+						result: "No active project",
+						description: `Importing ${assetType} asset`,
+					};
+				}
+
 				const response = await fetch(assetUrl);
 				if (!response.ok) {
 					return {
@@ -1113,24 +1122,41 @@ export async function executeToolCall(
 					},
 				);
 
-				const mediaManager = editor.media;
-				const asset = await mediaManager.addFromFile(file);
+				const assetsBefore = editor.media.getAssets().length;
+				await editor.media.addMediaAsset({
+					projectId,
+					asset: { file, name, type: assetType === "video" ? "video" : "image" },
+				});
+				const assetsAfter = editor.media.getAssets();
+				const newAsset = assetsAfter[assetsAfter.length - 1];
+
+				if (!newAsset || assetsAfter.length <= assetsBefore) {
+					return {
+						success: false,
+						result: `Failed to add ${assetType} asset`,
+						description: `Importing ${assetType} asset`,
+					};
+				}
 
 				const tracks = editor.timeline.getTracks();
-				const mediaTrack = tracks.find((track) => track.type === "media");
-				const trackId = mediaTrack
-					? mediaTrack.id
-					: editor.timeline.addTrack({ type: "media" });
+				const videoTrack = tracks.find((track) => track.type === "video");
+				const trackId = videoTrack
+					? videoTrack.id
+					: editor.timeline.addTrack({ type: "video" });
 
 				editor.timeline.insertElement({
 					placement: { mode: "explicit", trackId },
 					element: {
 						type: assetType === "video" ? "video" : "image",
-						mediaId: asset.id,
+						mediaId: newAsset.id,
 						startTime,
 						duration:
-							assetType === "video" ? (asset.duration ?? duration) : duration,
+							assetType === "video" ? (newAsset.duration ?? duration) : duration,
 						name,
+						trimStart: 0,
+						trimEnd: 0,
+						transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
+						opacity: 1,
 					},
 				});
 
@@ -1527,292 +1553,22 @@ export async function executeToolCall(
 			}
 
 			case "import_agent_timeline": {
-				const sessionId = args.sessionId as string;
+				const importResult = await importAgentTimeline(
+					args.sessionId as string,
+				);
 
-				const response = await apiFetch(`/api/agent/status/${sessionId}`);
-				if (!response.ok) {
+				if (!importResult.success) {
 					return {
 						success: false,
-						result: "Failed to fetch agent session",
+						result: importResult.errors.join("; ") || "Import failed",
 						description: "Importing agent timeline",
 					};
 				}
 
-				const statusData = (await response.json()) as Record<string, unknown>;
-				if (
-					statusData.status !== "completed" ||
-					!statusData.assembled_timeline
-				) {
-					return {
-						success: false,
-						result: `Agent session is not completed (status: ${statusData.status as string}). Wait for completion first.`,
-						description: "Importing agent timeline",
-					};
-				}
-
-				const timeline = statusData.assembled_timeline as Record<
-					string,
-					unknown
-				>;
-				const tracks = timeline.tracks as
-					| Record<string, Array<Record<string, unknown>>>
-					| undefined;
-				if (!tracks) {
-					return {
-						success: false,
-						result: "No tracks found in assembled timeline",
-						description: "Importing agent timeline",
-					};
-				}
-
-				const projectId = editor.project.getActive()?.metadata.id;
-				if (!projectId) {
-					return {
-						success: false,
-						result: "No active project",
-						description: "Importing agent timeline",
-					};
-				}
-
-				let videosAdded = 0;
-				let audiosAdded = 0;
-				let textsAdded = 0;
-				const errors: string[] = [];
-
-				// Helper to download a URL and create a media asset
-				const downloadAndAddAsset = async (
-					assetUrl: string,
-					name: string,
-					mediaType: "video" | "audio" | "image",
-				): Promise<string | null> => {
-					if (!assetUrl || !assetUrl.startsWith("http")) return null;
-					try {
-						const assetResp = await fetch(assetUrl);
-						if (!assetResp.ok) return null;
-						const blob = await assetResp.blob();
-						const ext =
-							mediaType === "video"
-								? "mp4"
-								: mediaType === "audio"
-									? "mp3"
-									: "jpg";
-						const mime =
-							mediaType === "video"
-								? "video/mp4"
-								: mediaType === "audio"
-									? "audio/mpeg"
-									: "image/jpeg";
-						const file = new File([blob], `${name}.${ext}`, { type: mime });
-
-						const assetsBefore = editor.media.getAssets().length;
-						await editor.media.addMediaAsset({
-							projectId,
-							asset: {
-								file,
-								name,
-								type: mediaType === "image" ? "image" : mediaType,
-							},
-						});
-						const assetsAfter = editor.media.getAssets();
-						if (assetsAfter.length > assetsBefore) {
-							const newAsset = assetsAfter.at(-1);
-							return newAsset?.id ?? null;
-						}
-					} catch (error) {
-						errors.push(
-							`Failed to download ${name}: ${error instanceof Error ? error.message : "unknown"}`,
-						);
-					}
-					return null;
-				};
-
-				// Import video track clips
-				const videoClips = tracks.video || [];
-				for (const clip of videoClips) {
-					const assetUrl = (clip.assetUrl as string) || "";
-					const clipType = (clip.type as string) || "video";
-					const clipName = (clip.id as string) || `clip-${videosAdded}`;
-
-					if (!assetUrl || assetUrl === "deferred_motion_graphic") continue;
-
-					const mediaType =
-						clipType === "image" ? ("image" as const) : ("video" as const);
-					const mediaId = await downloadAndAddAsset(
-						assetUrl,
-						clipName,
-						mediaType,
-					);
-					if (!mediaId) continue;
-
-					if (mediaType === "video") {
-						editor.timeline.insertElement({
-							element: {
-								type: "video",
-								mediaId,
-								name: clipName,
-								duration: (clip.duration as number) || 5,
-								startTime: (clip.startTime as number) || 0,
-								trimStart: (clip.trimStart as number) || 0,
-								trimEnd: (clip.trimEnd as number) || 0,
-								muted: false,
-								hidden: false,
-								transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
-								opacity: 1,
-							},
-							placement: { mode: "auto" },
-						});
-					} else {
-						editor.timeline.insertElement({
-							element: {
-								type: "image",
-								mediaId,
-								name: clipName,
-								duration: (clip.duration as number) || 5,
-								startTime: (clip.startTime as number) || 0,
-								trimStart: 0,
-								trimEnd: 0,
-								hidden: false,
-								transform: { scale: 1, position: { x: 0, y: 0 }, rotate: 0 },
-								opacity: 1,
-							},
-							placement: { mode: "auto" },
-						});
-					}
-					videosAdded++;
-				}
-
-				// Import audio tracks (voiceover, ambient, SFX)
-				const audioClips = [...(tracks.audio || []), ...(tracks.effects || [])];
-				for (const clip of audioClips) {
-					const assetUrl = (clip.assetUrl as string) || "";
-					if (!assetUrl || !assetUrl.startsWith("http")) continue;
-
-					const clipName = (clip.id as string) || `audio-${audiosAdded}`;
-					const mediaId = await downloadAndAddAsset(
-						assetUrl,
-						clipName,
-						"audio",
-					);
-					if (!mediaId) continue;
-
-					editor.timeline.insertElement({
-						element: {
-							type: "audio",
-							sourceType: "upload",
-							mediaId,
-							name: clipName,
-							duration: (clip.duration as number) || 5,
-							startTime: (clip.startTime as number) || 0,
-							trimStart: 0,
-							trimEnd: 0,
-							volume: (clip.volume as number) ?? 1,
-							muted: false,
-						},
-						placement: { mode: "auto" },
-					});
-					audiosAdded++;
-				}
-
-				// Import music track
-				const musicClips = tracks.music || [];
-				for (const clip of musicClips) {
-					const assetUrl = (clip.assetUrl as string) || "";
-					if (!assetUrl || !assetUrl.startsWith("http")) continue;
-
-					const clipName = (clip.id as string) || `music-${audiosAdded}`;
-					const mediaId = await downloadAndAddAsset(
-						assetUrl,
-						clipName,
-						"audio",
-					);
-					if (!mediaId) continue;
-
-					editor.timeline.insertElement({
-						element: {
-							type: "audio",
-							sourceType: "upload",
-							mediaId,
-							name: clipName,
-							duration: (clip.duration as number) || 30,
-							startTime: (clip.startTime as number) || 0,
-							trimStart: 0,
-							trimEnd: 0,
-							volume: (clip.volume as number) ?? 0.3,
-							muted: false,
-						},
-						placement: { mode: "auto" },
-					});
-					audiosAdded++;
-				}
-
-				// Import text overlays
-				const textClips = [...(tracks.text || []), ...(tracks.captions || [])];
-				const textItems: Array<{
-					element: ReturnType<typeof buildTextElement>;
-					placement: { mode: "auto" };
-				}> = [];
-
-				// Backend sends absolute pixel font sizes — convert to frontend relative scale
-				// Frontend formula: actualPixels = fontSize * (canvasHeight / FONT_SIZE_SCALE_REFERENCE)
-				// So: relativeFontSize = absolutePixels * FONT_SIZE_SCALE_REFERENCE / canvasHeight
-				const resolution = timeline.resolution as
-					| { width?: number; height?: number }
-					| undefined;
-				const timelineCanvasHeight =
-					resolution?.height ??
-					editor.project.getActive()?.settings.canvasSize?.height ??
-					1080;
-				const pixelToRelative =
-					FONT_SIZE_SCALE_REFERENCE / timelineCanvasHeight;
-
-				for (const clip of textClips) {
-					const content =
-						(clip.content as string) || (clip.text as string) || "";
-					if (!content) continue;
-
-					// Convert absolute pixel fontSize from backend to relative units for frontend
-					const rawFontSize = (clip.fontSize as number) || 48;
-					const relativeFontSize =
-						Math.round(rawFontSize * pixelToRelative * 10) / 10;
-
-					// Convert absolute pixel paddingX/paddingY to relative (or use as-is if small)
-					const rawPaddingX = clip.paddingX as number | undefined;
-					const rawPaddingY = clip.paddingY as number | undefined;
-
-					const element = buildTextElement({
-						raw: {
-							name: content.slice(0, 30),
-							content,
-							duration: (clip.duration as number) || 3,
-							fontSize: relativeFontSize,
-							fontFamily:
-								(clip.font as string) || (clip.fontFamily as string) || "Inter",
-							color: (clip.color as string) || "#ffffff",
-							fontWeight: (clip.fontWeight as "normal" | "bold") || "bold",
-							background: {
-								color: (clip.backgroundColor as string) || "#00000000",
-								paddingX: rawPaddingX,
-								paddingY: rawPaddingY,
-							},
-							textAlign: "center",
-							lineHeight: clip.lineHeight as number | undefined,
-							transform: { scale: 1, position: { x: 0, y: 0.35 }, rotate: 0 },
-						},
-						startTime: (clip.startTime as number) || 0,
-					});
-
-					textItems.push({ element, placement: { mode: "auto" } });
-					textsAdded++;
-				}
-
-				if (textItems.length > 0) {
-					editor.timeline.insertElements(textItems);
-				}
-
-				const summary = `Imported ${videosAdded} video/image clips, ${audiosAdded} audio clips, ${textsAdded} text overlays.`;
+				const summary = `Imported ${importResult.videosAdded} video/image clips, ${importResult.audiosAdded} audio clips, ${importResult.textsAdded} text overlays.`;
 				const errorSummary =
-					errors.length > 0
-						? ` ${errors.length} errors: ${errors.slice(0, 3).join("; ")}`
+					importResult.errors.length > 0
+						? ` ${importResult.errors.length} errors: ${importResult.errors.slice(0, 3).join("; ")}`
 						: "";
 
 				return {

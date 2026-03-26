@@ -1,3 +1,4 @@
+import type { TimelineElement } from "@/types/timeline";
 import { useState, useMemo } from "react";
 import { useEditor } from "@/hooks/use-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,8 +36,8 @@ export function AdjustmentView() {
 	const getAdjustmentValue = (adjustId: string): number => {
 		if (activeElements.length === 0) return 0;
 		const track = editor.timeline.getTrackById({ trackId: activeElements[0].trackId });
-		const element = track?.elements.find((e) => e.id === activeElements[0].elementId) as any;
-		const effects: Array<{ id: string; type: string; intensity: number }> =
+		const element = track?.elements.find((e) => e.id === activeElements[0].elementId) as TimelineElement | undefined;
+		const effects: Array<{ id: string; type: string; intensity?: number }> =
 			element?.effects || [];
 		const found = effects.find((e) => e.id === adjustId);
 		return found?.intensity ?? 0;
@@ -48,8 +49,8 @@ export function AdjustmentView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
-				const existingEffects: Array<{ id: string; type: string; intensity: number }> =
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
+				const existingEffects: Array<{ id: string; type: string; intensity?: number }> =
 					element?.effects || [];
 
 				// If value is the default (neutral), remove the adjustment effect
@@ -104,8 +105,8 @@ export function AdjustmentView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
-				const existingEffects: Array<{ id: string; type: string; intensity: number }> =
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
+				const existingEffects: Array<{ id: string; type: string; intensity?: number }> =
 					element?.effects || [];
 
 				return {
@@ -153,7 +154,7 @@ export function AdjustmentView() {
 
 			{/* Category Tabs */}
 			<div className="px-4 pt-3 pb-2 flex gap-1 flex-wrap">
-				<button
+				<button type="button"
 					onClick={() => setSelectedCategory("all")}
 					className={cn(
 						"px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
@@ -166,7 +167,7 @@ export function AdjustmentView() {
 				</button>
 				{(Object.entries(ADJUSTMENT_CATEGORIES) as [AdjustmentCategory, string][]).map(
 					([key, label]) => (
-						<button
+						<button type="button"
 							key={key}
 							onClick={() => setSelectedCategory(key)}
 							className={cn(
@@ -216,7 +217,7 @@ export function AdjustmentView() {
 											{currentValue}
 										</span>
 										{isModified && (
-											<button
+											<button type="button"
 												onClick={() =>
 													handleSetValue(adj, adj.defaultValue)
 												}

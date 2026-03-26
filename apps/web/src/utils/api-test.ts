@@ -28,7 +28,7 @@ export async function testAPIConnection(): Promise<void> {
 		const time = performance.now() - start;
 
 		if (response.ok) {
-			const data = await response.json();
+			await response.json();
 			results.push({
 				name: "Health Check",
 				passed: true,

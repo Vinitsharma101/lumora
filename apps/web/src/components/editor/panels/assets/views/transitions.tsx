@@ -1,3 +1,4 @@
+import type { TimelineElement } from "@/types/timeline";
 import { useState, useMemo } from "react";
 import { useEditor } from "@/hooks/use-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -52,7 +53,7 @@ export function TransitionsView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
 				const existingTransitions: Array<{ id: string; type: string; duration: number; direction: Direction }> =
 					element?.transitions || [];
 
@@ -93,7 +94,7 @@ export function TransitionsView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
 				const existingTransitions: Array<{ id: string; type: string; duration: number; direction: Direction }> =
 					element?.transitions || [];
 
@@ -114,7 +115,7 @@ export function TransitionsView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
 				const existingTransitions: Array<{ id: string; type: string; duration: number; direction: Direction }> =
 					element?.transitions || [];
 
@@ -137,7 +138,7 @@ export function TransitionsView() {
 		editor.timeline.updateElements({
 			updates: activeElements.map((el) => {
 				const track = editor.timeline.getTrackById({ trackId: el.trackId });
-				const element = track?.elements.find((e) => e.id === el.elementId) as any;
+				const element = track?.elements.find((e) => e.id === el.elementId) as TimelineElement | undefined;
 				const existingTransitions: Array<{ id: string; type: string; duration: number; direction: Direction; easing?: string }> =
 					element?.transitions || [];
 
@@ -158,7 +159,7 @@ export function TransitionsView() {
 	const getAppliedTransitions = () => {
 		if (activeElements.length === 0) return [];
 		const track = editor.timeline.getTrackById({ trackId: activeElements[0].trackId });
-		const element = track?.elements.find((e) => e.id === activeElements[0].elementId) as any;
+		const element = track?.elements.find((e) => e.id === activeElements[0].elementId) as TimelineElement | undefined;
 		return (element?.transitions || []) as Array<{
 			id: string;
 			type: string;
@@ -201,7 +202,7 @@ export function TransitionsView() {
 
 			{/* Direction Toggle */}
 			<div className="px-4 pb-2 flex gap-1">
-				<button
+				<button type="button"
 					onClick={() => setDirection("in")}
 					className={cn(
 						"flex-1 py-1.5 rounded-md text-xs font-medium transition-colors",
@@ -212,7 +213,7 @@ export function TransitionsView() {
 				>
 					↗ In
 				</button>
-				<button
+				<button type="button"
 					onClick={() => setDirection("out")}
 					className={cn(
 						"flex-1 py-1.5 rounded-md text-xs font-medium transition-colors",
@@ -227,7 +228,7 @@ export function TransitionsView() {
 
 			{/* Category Tabs */}
 			<div className="px-4 pb-2 flex gap-1 flex-wrap">
-				<button
+				<button type="button"
 					onClick={() => setSelectedCategory("all")}
 					className={cn(
 						"px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
@@ -240,7 +241,7 @@ export function TransitionsView() {
 				</button>
 				{(Object.entries(TRANSITION_CATEGORIES) as [TransitionCategory, string][]).map(
 					([key, label]) => (
-						<button
+						<button type="button"
 							key={key}
 							onClick={() => setSelectedCategory(key)}
 							className={cn(
@@ -264,7 +265,7 @@ export function TransitionsView() {
 							(t) => t.id === `${transition.id}-${direction}`,
 						);
 						return (
-							<button
+							<button type="button"
 								key={transition.id}
 								onClick={() => handleApplyTransition(transition)}
 								title={transition.description}

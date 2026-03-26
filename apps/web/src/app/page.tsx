@@ -3,7 +3,6 @@ import { Hero } from "@/components/landing/hero";
 import { UseCases } from "@/components/landing/use-cases";
 import { Features } from "@/components/landing/features";
 import { AIHighlight } from "@/components/landing/ai-highlight";
-import { Community } from "@/components/landing/community";
 import { CTASection } from "@/components/landing/cta-section";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -18,13 +17,12 @@ export const metadata: Metadata = {
 
 export default async function Home() {
 	return (
-		<div className="dark bg-[hsl(0,0%,5%)] text-[hsl(0,0%,87%)]">
+		<div className="dark bg-[hsl(0_0%_5%)] text-[hsl(0_0%_87%)]">
 			<Header />
 			<Hero />
 			<UseCases />
 			<Features />
 			<AIHighlight />
-			<Community />
 			<CTASection />
 			<Footer />
 		</div>

@@ -22,7 +22,6 @@ const DURATION_OPTIONS = [
 ];
 
 export function MovieCreationWizard() {
-	const [step, setStep] = useState(0);
 	const {
 		query,
 		duration,
@@ -34,18 +33,16 @@ export function MovieCreationWizard() {
 		startPipeline,
 	} = useMovieStore();
 
+	const hasPrefilledQuery = query.trim().length > 10;
+	const [step, setStep] = useState(hasPrefilledQuery ? 1 : 0);
+
 	const steps = [
 		{ title: "Concept", description: "Describe your movie" },
 		{ title: "Settings", description: "Duration & style" },
 		{ title: "Review", description: "Confirm & start" },
 	];
 
-	const canProceed =
-		step === 0
-			? query.trim().length > 10
-			: step === 1
-				? true
-				: true;
+	const canProceed = step === 0 ? query.trim().length > 10 : true;
 
 	return (
 		<div className="flex flex-col gap-6 p-6 max-w-2xl mx-auto">

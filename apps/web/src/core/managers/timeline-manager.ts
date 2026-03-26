@@ -338,7 +338,7 @@ export class TimelineManager {
 	}
 
 	private notify(): void {
-		this.listeners.forEach((fn) => fn());
+		this.listeners.forEach((fn) => { fn(); });
 	}
 
 	updateTracks(newTracks: TimelineTrack[]): void {

@@ -1,13 +1,56 @@
 import { create } from "zustand";
+import { apiFetch } from "@/lib/api-client";
 
 export type MovieStatus =
 	| "idle"
 	| "configuring"
 	| "waiting_approval"
+	| "waiting_storyboard_approval"
 	| "processing"
 	| "paused_checkpoint"
 	| "completed"
 	| "failed";
+
+export type SceneStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ShowBible {
+	title: string;
+	logline: string;
+	genre: string;
+	contentType: string;
+	visualStyle: string;
+	colorPalette: string[];
+	rules: string[];
+	editingStrategy: {
+		pacingNotes: string;
+		musicStrategy: string;
+		captionStrategy: string;
+		brollStrategy: string;
+		transitionPalette: string[];
+		targetCutsPerMinute: number;
+	};
+	characters: Array<{
+		charId: string;
+		name: string;
+		description: string;
+		role: string;
+		arc: string;
+		voiceDescription: string;
+	}>;
+}
+
+export interface ActPlan {
+	actNumber: number;
+	title: string;
+	description: string;
+	scenes: Array<{
+		sceneNumber: number;
+		description: string;
+		location: string;
+		mood: string;
+		estimatedDurationSeconds: number;
+	}>;
+}
 
 export interface MovieCharacter {
 	charId: string;
@@ -62,6 +105,11 @@ export interface MovieState {
 	// Pipeline data
 	characters: MovieCharacter[];
 	scenes: MovieScene[];
+	showBible: ShowBible | null;
+	acts: ActPlan[];
+	sceneStatuses: Record<string, SceneStatus>;
+	scenesCompleted: number;
+	scenesTotal: number;
 	actsProgress: Record<string, ActProgress>;
 	costEstimate: CostEstimate | null;
 	messages: AgentMessage[];
@@ -91,8 +139,10 @@ export interface MovieActions {
 	startPipeline: () => Promise<void>;
 	submitAnswer: (questionId: string, value: string) => Promise<void>;
 	approveCostEstimate: () => Promise<void>;
+	approveStoryboard: (feedback?: string) => Promise<void>;
 	approveCheckpoint: (feedback?: string) => Promise<void>;
 	regenerateScene: (sceneIndex: number, prompt?: string) => Promise<void>;
+	importTimeline: () => Promise<void>;
 	pollStatus: () => Promise<void>;
 	startPolling: () => void;
 	stopPolling: () => void;
@@ -109,6 +159,11 @@ const initialState: MovieState = {
 	style: "cinematic",
 	characters: [],
 	scenes: [],
+	showBible: null,
+	acts: [],
+	sceneStatuses: {},
+	scenesCompleted: 0,
+	scenesTotal: 0,
 	actsProgress: {},
 	costEstimate: null,
 	messages: [],
@@ -147,8 +202,7 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 			})),
 
 		startPipeline: async () => {
-			const { projectId, query, context, duration, style, characters } =
-				get();
+			const { projectId, query, context, duration, style, characters } = get();
 			if (!projectId || !query) return;
 
 			try {
@@ -156,7 +210,7 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 
 				// Register characters for consistency before starting pipeline
 				for (const character of characters) {
-					await fetch(`/api/agent/character/${projectId}`, {
+					await apiFetch(`/api/agent/character/${projectId}`, {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
@@ -178,28 +232,23 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 					};
 				}
 
-				const response = await fetch(
-					`/api/agent/execute/${projectId}`,
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							query: `Create a ${duration}-minute ${style} movie: ${query}`,
-							context: {
-								...context,
-								duration,
-								style,
-								character_profiles: characterProfiles,
-							},
-							media_asset_ids: [],
-						}),
-					},
-				);
+				const response = await apiFetch(`/api/agent/execute/${projectId}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						query: `Create a ${duration}-minute ${style} movie: ${query}`,
+						context: {
+							...context,
+							duration,
+							style,
+							character_profiles: characterProfiles,
+						},
+						media_asset_ids: [],
+					}),
+				});
 
 				if (!response.ok) {
-					throw new Error(
-						`Failed to start pipeline: ${response.statusText}`,
-					);
+					throw new Error(`Failed to start pipeline: ${response.statusText}`);
 				}
 
 				const data = await response.json();
@@ -208,10 +257,7 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 			} catch (error) {
 				set({
 					status: "failed",
-					error:
-						error instanceof Error
-							? error.message
-							: "Unknown error",
+					error: error instanceof Error ? error.message : "Unknown error",
 				});
 			}
 		},
@@ -220,7 +266,7 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 			const { sessionId } = get();
 			if (!sessionId) return;
 
-			await fetch(`/api/agent/answer/${sessionId}`, {
+			await apiFetch(`/api/agent/answer/${sessionId}`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ question_id: questionId, value }),
@@ -231,7 +277,7 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 			const { sessionId } = get();
 			if (!sessionId) return;
 
-			await fetch(`/api/agent/approve/${sessionId}`, {
+			await apiFetch(`/api/agent/approve/${sessionId}`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ checkpoint: "cost_approval", approved: true }),
@@ -239,11 +285,35 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 			set({ status: "processing" });
 		},
 
-		regenerateScene: async (sceneIndex, prompt) => {
+		approveStoryboard: async (feedback) => {
 			const { sessionId } = get();
 			if (!sessionId) return;
 
-			await fetch(`/api/agent/regenerate/${sessionId}`, {
+			await apiFetch(`/api/agent/approve/${sessionId}`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					checkpoint: "storyboard",
+					approved: true,
+					feedback: feedback ?? null,
+				}),
+			});
+			set({ status: "processing" });
+		},
+
+		importTimeline: async () => {
+			const { sessionId } = get();
+			if (!sessionId) return;
+
+			const { importAgentTimeline } = await import("@/lib/ai/timeline-import");
+			await importAgentTimeline(sessionId);
+		},
+
+		regenerateScene: async (sceneIndex, prompt) => {
+			const { sessionId, sceneStatuses } = get();
+			if (!sessionId) return;
+
+			await apiFetch(`/api/agent/regenerate/${sessionId}`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -251,13 +321,23 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 					modified_prompt: prompt ?? null,
 				}),
 			});
+
+			// Reset scene status and resume polling
+			set({
+				sceneStatuses: {
+					...sceneStatuses,
+					[String(sceneIndex)]: "pending" as SceneStatus,
+				},
+				status: "processing",
+			});
+			get().startPolling();
 		},
 
 		approveCheckpoint: async (feedback) => {
 			const { sessionId } = get();
 			if (!sessionId) return;
 
-			await fetch(`/api/agent/approve/${sessionId}`, {
+			await apiFetch(`/api/agent/approve/${sessionId}`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -274,9 +354,7 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 			if (!sessionId) return;
 
 			try {
-				const response = await fetch(
-					`/api/agent/status/${sessionId}`,
-				);
+				const response = await apiFetch(`/api/agent/status/${sessionId}`);
 				if (!response.ok) return;
 
 				const data = await response.json();
@@ -301,13 +379,84 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 					newState.status = "paused_checkpoint";
 				} else if (apiStatus === "waiting_approval") {
 					newState.status = "waiting_approval";
-					newState.costEstimate = data.cost_estimate ? {
-						totalEstimatedUsd: data.cost_estimate.total_estimated_usd ?? 0,
-						breakdown: data.cost_estimate.breakdown ?? {},
-						counts: data.cost_estimate.counts ?? { scenes: 0, shots: 0, dialogLines: 0, characters: 0 },
-					} : null;
+					newState.costEstimate = data.cost_estimate
+						? {
+								totalEstimatedUsd: data.cost_estimate.total_estimated_usd ?? 0,
+								breakdown: data.cost_estimate.breakdown ?? {},
+								counts: data.cost_estimate.counts ?? {
+									scenes: 0,
+									shots: 0,
+									dialogLines: 0,
+									characters: 0,
+								},
+							}
+						: null;
+				} else if (apiStatus === "waiting_storyboard_approval") {
+					newState.status = "waiting_storyboard_approval";
 				} else {
 					newState.status = "processing";
+				}
+
+				// Parse show bible
+				if (data.show_bible) {
+					const bible = data.show_bible;
+					const strategy = bible.editing_strategy || {};
+					newState.showBible = {
+						title: bible.title || "",
+						logline: bible.logline || "",
+						genre: bible.genre || "",
+						contentType: bible.content_type || "",
+						visualStyle: bible.visual_style || "",
+						colorPalette: bible.color_palette || [],
+						rules: bible.rules || [],
+						editingStrategy: {
+							pacingNotes: strategy.pacing_notes || "",
+							musicStrategy: strategy.music_strategy || "",
+							captionStrategy: strategy.caption_strategy || "",
+							brollStrategy: strategy.broll_strategy || "",
+							transitionPalette: strategy.transition_palette || [],
+							targetCutsPerMinute: strategy.target_cuts_per_minute || 0,
+						},
+						characters: (bible.characters || []).map(
+							(c: Record<string, unknown>) => ({
+								charId: c.char_id || "",
+								name: c.name || "",
+								description: c.description || "",
+								role: c.role || "",
+								arc: c.arc || "",
+								voiceDescription: c.voice_description || "",
+							}),
+						),
+					};
+				}
+
+				// Parse acts
+				if (data.acts && Array.isArray(data.acts)) {
+					newState.acts = data.acts.map((act: Record<string, unknown>) => ({
+						actNumber: act.act_number || 0,
+						title: act.title || "",
+						description: act.description || "",
+						scenes: ((act.scenes as Array<Record<string, unknown>>) || []).map(
+							(s) => ({
+								sceneNumber: s.scene_number || 0,
+								description: s.description || "",
+								location: s.location || "",
+								mood: s.mood || "",
+								estimatedDurationSeconds: s.estimated_duration_seconds || 0,
+							}),
+						),
+					}));
+				}
+
+				// Parse scene statuses and counts
+				if (data.scene_statuses) {
+					newState.sceneStatuses = data.scene_statuses;
+				}
+				if (data.scenes_completed !== undefined) {
+					newState.scenesCompleted = data.scenes_completed;
+				}
+				if (data.scenes_total !== undefined) {
+					newState.scenesTotal = data.scenes_total;
 				}
 
 				// Update acts progress
@@ -329,19 +478,16 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 					const scenes = Array.isArray(data.scene_plan)
 						? data.scene_plan
 						: data.scene_plan.scenes || [];
-					newState.scenes = scenes.map(
-						(s: Record<string, unknown>) => ({
-							sceneNumber: s.scene_number,
-							description: s.description,
-							location: s.location || "",
-							charactersPresent: s.characters_present || [],
-							estimatedDurationSeconds:
-								s.estimated_duration_seconds || 0,
-							tensionLevel: s.tension_level || 5,
-							mood: s.mood || "",
-							actNumber: s.act_number || 1,
-						}),
-					);
+					newState.scenes = scenes.map((s: Record<string, unknown>) => ({
+						sceneNumber: s.scene_number,
+						description: s.description,
+						location: s.location || "",
+						charactersPresent: s.characters_present || [],
+						estimatedDurationSeconds: s.estimated_duration_seconds || 0,
+						tensionLevel: s.tension_level || 5,
+						mood: s.mood || "",
+						actNumber: s.act_number || 1,
+					}));
 				}
 
 				set(newState);

@@ -4,16 +4,37 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-	generateTextToVideo,
-	generateImageToVideo,
-	generateScriptToScenes,
-	removeBackground,
-	upscaleImage,
-	styleTransfer,
-	getAIJobStatus,
-	type AIJobResponse,
-} from "@/lib/cloud-api";
+
+interface AIJobResponse {
+	jobId: string;
+	job_id: string;
+	status: string;
+	progress: number;
+	output_url?: string | null;
+	output_data?: Record<string, unknown> | null;
+	error_message?: string | null;
+}
+
+/** Call the Next.js /api/ai/video route for all video/AI operations */
+async function callAIVideoAPI(
+	action: string,
+	params: Record<string, unknown>,
+): Promise<AIJobResponse> {
+	const response = await fetch("/api/ai/video", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ action, ...params }),
+	});
+	if (!response.ok) throw new Error(`API error ${response.status}`);
+	return response.json();
+}
+
+/** Poll a job via the Next.js /api/ai/jobs route */
+async function pollJobStatus(jobId: string): Promise<AIJobResponse> {
+	const response = await fetch(`/api/ai/jobs/${jobId}`);
+	if (!response.ok) throw new Error(`Job poll failed: ${response.status}`);
+	return response.json();
+}
 
 type AIMode =
 	| "text-to-video"
@@ -36,7 +57,7 @@ export function AIGenerateView() {
 	const [prompt, setPrompt] = useState("");
 	const [imageUrl, setImageUrl] = useState("");
 	const [script, setScript] = useState("");
-	const [provider, setProvider] = useState("google_veo");
+	const [provider, setProvider] = useState("luma");
 	const [duration, setDuration] = useState(4);
 	const [aspectRatio, setAspectRatio] = useState("16:9");
 	const [stylePreset, setStylePreset] = useState("cinematic");
@@ -48,7 +69,7 @@ export function AIGenerateView() {
 		async ({ jobId, index }: { jobId: string; index: number }) => {
 			const poll = async () => {
 				try {
-					const status = await getAIJobStatus({ jobId });
+					const status = await pollJobStatus(jobId);
 					setJobs((previous) =>
 						previous.map((job, idx) =>
 							idx === index
@@ -81,30 +102,30 @@ export function AIGenerateView() {
 			let response: AIJobResponse;
 
 			if (mode === "text-to-video") {
-				response = await generateTextToVideo({
+				response = await callAIVideoAPI("text-to-video", {
 					prompt,
 					duration,
 					aspectRatio,
 					provider,
 				});
 			} else if (mode === "image-to-video") {
-				response = await generateImageToVideo({
+				response = await callAIVideoAPI("image-to-video", {
 					imageUrl,
 					prompt,
 					duration,
 					provider,
 				});
 			} else if (mode === "script-to-scenes") {
-				response = await generateScriptToScenes({
+				response = await callAIVideoAPI("script-to-scenes", {
 					script,
 					aspectRatio,
 				});
 			} else if (mode === "bg-remove") {
-				response = await removeBackground({ imageUrl });
+				response = await callAIVideoAPI("bg-remove", { imageUrl });
 			} else if (mode === "upscale") {
-				response = await upscaleImage({ imageUrl, scale });
+				response = await callAIVideoAPI("upscale", { imageUrl, scale });
 			} else {
-				response = await styleTransfer({
+				response = await callAIVideoAPI("style-transfer", {
 					imageUrl,
 					stylePreset,
 				});
@@ -112,7 +133,7 @@ export function AIGenerateView() {
 
 			const newIndex = jobs.length;
 			const tracker: JobTracker = {
-				jobId: response.job_id,
+				jobId: response.job_id ?? response.jobId,
 				type: mode,
 				status: response.status,
 				progress: response.progress,
@@ -120,7 +141,7 @@ export function AIGenerateView() {
 			};
 			setJobs((previous) => [...previous, tracker]);
 
-			pollJob({ jobId: response.job_id, index: newIndex });
+			pollJob({ jobId: response.job_id ?? response.jobId, index: newIndex });
 		} catch (error) {
 			console.error("Failed to start AI job:", error);
 		} finally {
@@ -209,6 +230,7 @@ export function AIGenerateView() {
 								<Label className="text-xs">Provider</Label>
 								<div className="flex gap-1">
 									{[
+										{ value: "luma", label: "Luma" },
 										{ value: "google_veo", label: "Veo" },
 										{ value: "openai_sora", label: "Sora" },
 										{ value: "replicate", label: "Replicate" },
@@ -345,10 +367,7 @@ export function AIGenerateView() {
 					<h4 className="mb-2 text-xs font-semibold">Jobs</h4>
 					<div className="space-y-2">
 						{jobs.map((job) => (
-							<div
-								key={job.jobId}
-								className="bg-muted rounded-md p-2 text-xs"
-							>
+							<div key={job.jobId} className="bg-muted rounded-md p-2 text-xs">
 								<div className="flex items-center justify-between">
 									<span className="font-medium">{job.type}</span>
 									<span

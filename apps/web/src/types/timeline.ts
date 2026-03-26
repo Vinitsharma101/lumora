@@ -80,7 +80,8 @@ export interface Effect {
 	id: string;
 	type: string;
 	intensity?: number;
-	[key: string]: any;
+	parameters?: Record<string, unknown>;
+	[key: string]: unknown;
 }
 
 export interface Transition {
@@ -88,7 +89,7 @@ export interface Transition {
 	type: string;
 	duration: number;
 	direction: "in" | "out";
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 interface BaseTimelineElement {

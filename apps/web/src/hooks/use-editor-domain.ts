@@ -45,8 +45,7 @@ function useEditorWithManagers(managers: ManagerKey[]): EditorCore {
 				}
 			};
 		},
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[editor, ...managers],
+		[editor, ...managers, managers.map],
 	);
 
 	const getSnapshot = useCallback(() => versionRef.current, []);

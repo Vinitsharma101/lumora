@@ -9,6 +9,7 @@ import type {
 } from "@/types/project";
 import type { ExportOptions, ExportResult } from "@/types/export";
 import { storageService } from "@/services/storage/service";
+import { cloudSyncService } from "@/services/storage/cloud-sync";
 import { toast } from "sonner";
 import { generateUUID } from "@/utils/id";
 import { UpdateProjectSettingsCommand } from "@/lib/commands/project";
@@ -109,6 +110,7 @@ export class ProjectManager {
 
 		try {
 			await storageService.saveProject({ project: newProject });
+			cloudSyncService.saveProject({ project: newProject });
 			this.updateMetadata(newProject);
 
 			return newProject.metadata.id;
@@ -184,6 +186,7 @@ export class ProjectManager {
 			};
 
 			await storageService.saveProject({ project: updatedProject });
+			cloudSyncService.saveProject({ project: updatedProject });
 			this.active = updatedProject;
 			this.updateMetadata(updatedProject);
 		} catch (error) {
@@ -627,6 +630,6 @@ export class ProjectManager {
 	}
 
 	private notify(): void {
-		this.listeners.forEach((fn) => fn());
+		this.listeners.forEach((fn) => { fn(); });
 	}
 }

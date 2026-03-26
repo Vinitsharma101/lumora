@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ChevronRight, Plus } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -18,6 +19,7 @@ import {
 	type StickerItem as StickerData,
 } from "@/lib/stickers";
 import { useStickersStore } from "@/stores/stickers-store";
+import type { StickerCollection } from "@/stores/stickers-store";
 import { cn } from "@/utils/ui";
 import {
 	HappyIcon,
@@ -80,28 +82,11 @@ export function StickersView() {
 	);
 }
 
-function StickerGrid({
-	items,
-	shouldCapSize = false,
-}: {
-	items: StickerData[];
-	shouldCapSize?: boolean;
-}) {
-	const gridStyle: CSSProperties & {
-		"--sticker-min": string;
-		"--sticker-max"?: string;
-	} = {
-		gridTemplateColumns: shouldCapSize
-			? "repeat(auto-fill, minmax(var(--sticker-min, 96px), var(--sticker-max, 160px)))"
-			: "repeat(auto-fit, minmax(var(--sticker-min, 96px), 1fr))",
-		"--sticker-min": "96px",
-		...(shouldCapSize ? { "--sticker-max": "160px" } : {}),
-	};
-
+function StickerGrid({ items }: { items: StickerData[] }) {
 	return (
-		<div className="grid gap-2" style={gridStyle}>
+		<div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
 			{items.map((item) => (
-				<StickerItem key={item.id} item={item} shouldCapSize={shouldCapSize} />
+				<StickerItem key={item.id} item={item} />
 			))}
 		</div>
 	);
@@ -122,6 +107,31 @@ function EmptyView({ message }: { message: string }) {
 	);
 }
 
+function CollectionSection({
+	collection,
+	onSeeAll,
+}: {
+	collection: StickerCollection;
+	onSeeAll: ({ categoryId }: { categoryId: string }) => void;
+}) {
+	return (
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center justify-between">
+				<span className="text-sm font-medium">{collection.label}</span>
+				<button
+					type="button"
+					onClick={() => onSeeAll({ categoryId: collection.id })}
+					className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
+				>
+					See all
+					<ChevronRight className="size-3" />
+				</button>
+			</div>
+			<StickerGrid items={collection.items} />
+		</div>
+	);
+}
+
 function StickersContentView() {
 	const {
 		searchQuery,
@@ -130,7 +140,17 @@ function StickersContentView() {
 		recentStickers,
 		isSearching,
 		clearRecentStickers,
+		collections,
+		isBrowseLoading,
+		loadCollections,
+		selectedCategory,
+		setSelectedCategory,
 	} = useStickersStore();
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: selectedCategory triggers collection reload
+	useEffect(() => {
+		loadCollections();
+	}, [loadCollections, selectedCategory]);
 
 	const itemsToDisplay = useMemo(() => {
 		if (viewMode === "search" && searchResults) {
@@ -151,10 +171,14 @@ function StickersContentView() {
 		return items;
 	}, [recentStickers]);
 
+	const handleSeeAll = ({ categoryId }: { categoryId: string }) => {
+		setSelectedCategory({ category: categoryId as StickerCategory });
+	};
+
 	return (
 		<div className="flex h-full flex-col gap-4">
 			{recentStickerItems.length > 0 && viewMode === "browse" && (
-				<div className="flex h-full flex-col gap-2">
+				<div className="flex flex-col gap-2">
 					<div className="flex items-center gap-2">
 						<HugeiconsIcon
 							icon={ClockIcon}
@@ -181,9 +205,31 @@ function StickersContentView() {
 							</Tooltip>
 						</TooltipProvider>
 					</div>
-					<StickerGrid items={recentStickerItems.slice(0, 12)} shouldCapSize />
+					<StickerGrid items={recentStickerItems.slice(0, 12)} />
 				</div>
 			)}
+
+			{viewMode === "browse" &&
+				(isBrowseLoading && collections.length === 0 ? (
+					<div className="flex items-center justify-center py-8">
+						<Spinner className="text-muted-foreground size-6" />
+					</div>
+				) : collections.length > 0 ? (
+					<div className="flex flex-col gap-5">
+						{collections.map((collection) => (
+							<CollectionSection
+								key={collection.id}
+								collection={collection}
+								onSeeAll={handleSeeAll}
+							/>
+						))}
+					</div>
+				) : (
+					!isBrowseLoading &&
+					recentStickerItems.length === 0 && (
+						<EmptyView message="Browse stickers by selecting a category above" />
+					)
+				))}
 
 			{viewMode === "search" && (
 				<div className="h-full">
@@ -198,7 +244,7 @@ function StickersContentView() {
 									{searchResults.total} results
 								</span>
 							</div>
-							<StickerGrid items={itemsToDisplay} shouldCapSize />
+							<StickerGrid items={itemsToDisplay} />
 						</div>
 					) : searchQuery ? (
 						<EmptyView message={`No stickers found for "${searchQuery}"`} />
@@ -211,10 +257,9 @@ function StickersContentView() {
 
 interface StickerItemProps {
 	item: StickerData;
-	shouldCapSize?: boolean;
 }
 
-function StickerItem({ item, shouldCapSize = false }: StickerItemProps) {
+function StickerItem({ item }: StickerItemProps) {
 	const { addingSticker, addStickerToTimeline } = useStickersStore();
 	const isAdding = addingSticker === item.id;
 	const [hasImageError, setHasImageError] = useState(false);
@@ -241,27 +286,19 @@ function StickerItem({ item, shouldCapSize = false }: StickerItemProps) {
 	};
 
 	const preview = hasImageError ? (
-		<div className="flex size-full items-center justify-center p-2">
-			<span className="text-muted-foreground text-center text-xs break-all">
+		<div className="flex size-full items-center justify-center p-1">
+			<span className="text-muted-foreground text-center text-[0.6rem] break-all">
 				{displayName}
 			</span>
 		</div>
 	) : (
-		<div className="flex size-full items-center justify-center p-4">
+		<div className="flex size-full items-center justify-center p-2">
 			<Image
 				src={item.previewUrl}
 				alt={displayName}
-				width={64}
-				height={64}
-				className="size-full object-contain"
-				style={
-					shouldCapSize
-						? {
-								maxWidth: "var(--sticker-max, 160px)",
-								maxHeight: "var(--sticker-max, 160px)",
-							}
-						: undefined
-				}
+				width={48}
+				height={48}
+				className="size-full object-contain transition-transform duration-150 group-hover:scale-110"
 				onError={() => {
 					setHasImageError(true);
 				}}
@@ -273,7 +310,10 @@ function StickerItem({ item, shouldCapSize = false }: StickerItemProps) {
 
 	return (
 		<div
-			className={cn("relative", isAdding && "pointer-events-none opacity-50")}
+			className={cn(
+				"group/sticker relative",
+				isAdding && "pointer-events-none opacity-50",
+			)}
 		>
 			<DraggableItem
 				name={displayName}
@@ -291,6 +331,25 @@ function StickerItem({ item, shouldCapSize = false }: StickerItemProps) {
 				variant="card"
 				containerClassName="w-full"
 			/>
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							onClick={(event) => {
+								event.stopPropagation();
+								handleAdd();
+							}}
+							className="bg-primary text-primary-foreground absolute right-0.5 bottom-0.5 z-20 flex size-5 items-center justify-center rounded-full opacity-0 shadow-md transition-opacity group-hover/sticker:opacity-100"
+						>
+							<Plus className="size-3" />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent side="top">
+						<p>Add to timeline</p>
+					</TooltipContent>
+				</Tooltip>
+			</TooltipProvider>
 			{isAdding && (
 				<div className="absolute inset-0 z-10 flex items-center justify-center rounded-md bg-black/60">
 					<Spinner className="size-6 text-white" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMovieStore, type MovieCharacter } from "@/stores/movie-store";
 
 export function CharacterGallery() {
@@ -10,6 +10,27 @@ export function CharacterGallery() {
 	const [newName, setNewName] = useState("");
 	const [newDescription, setNewDescription] = useState("");
 	const [newVoice, setNewVoice] = useState("");
+	const [newReferencePreview, setNewReferencePreview] = useState<
+		string | null
+	>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	const handleReferenceSelect = (
+		event: React.ChangeEvent<HTMLInputElement>,
+		charId?: string,
+	) => {
+		const file = event.target.files?.[0];
+		if (!file) return;
+
+		const objectUrl = URL.createObjectURL(file);
+
+		if (charId) {
+			updateCharacter(charId, { referenceImageUrl: objectUrl });
+		} else {
+			setNewReferencePreview(objectUrl);
+
+		}
+	};
 
 	const handleAdd = () => {
 		if (!newName.trim()) return;
@@ -18,7 +39,7 @@ export function CharacterGallery() {
 			charId: `char_${Date.now()}`,
 			name: newName.trim(),
 			description: newDescription.trim(),
-			referenceImageUrl: null,
+			referenceImageUrl: newReferencePreview,
 			voiceDescription: newVoice.trim() || null,
 		};
 
@@ -26,6 +47,8 @@ export function CharacterGallery() {
 		setNewName("");
 		setNewDescription("");
 		setNewVoice("");
+		setNewReferencePreview(null);
+
 		setIsAdding(false);
 	};
 
@@ -67,6 +90,52 @@ export function CharacterGallery() {
 						placeholder="Voice description (e.g., warm female voice, mid-30s, slight British accent)"
 						className="w-full p-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
 					/>
+
+					{/* Reference image upload */}
+					<div>
+						<span className="text-xs text-zinc-400 mb-1 block">
+							Reference Image (optional)
+						</span>
+						<input
+							ref={fileInputRef}
+							type="file"
+							accept="image/*"
+							onChange={(event) => handleReferenceSelect(event)}
+							className="hidden"
+						/>
+						{newReferencePreview ? (
+							<div className="relative">
+								{/* biome-ignore lint/performance/noImgElement: local object URL */}
+								<img
+									src={newReferencePreview}
+									alt="Reference preview"
+									className="w-full h-24 object-cover rounded border border-zinc-700"
+								/>
+								<button
+									type="button"
+									onClick={() => {
+										if (newReferencePreview) {
+											URL.revokeObjectURL(newReferencePreview);
+										}
+										setNewReferencePreview(null);
+								
+									}}
+									className="absolute top-1 right-1 w-5 h-5 bg-zinc-900/80 rounded-full flex items-center justify-center text-xs text-zinc-400 hover:text-red-400"
+								>
+									×
+								</button>
+							</div>
+						) : (
+							<button
+								type="button"
+								onClick={() => fileInputRef.current?.click()}
+								className="w-full p-3 border border-dashed border-zinc-700 rounded text-xs text-zinc-500 hover:border-zinc-500 hover:text-zinc-400"
+							>
+								Click to upload reference image
+							</button>
+						)}
+					</div>
+
 					<button
 						type="button"
 						onClick={handleAdd}
@@ -123,15 +192,48 @@ export function CharacterGallery() {
 							</p>
 						)}
 
-						{character.referenceImageUrl && (
-							<div className="mt-2">
-								<img
-									src={character.referenceImageUrl}
-									alt={character.name}
-									className="w-full h-24 object-cover rounded"
-								/>
-							</div>
-						)}
+						{/* Reference image */}
+						<div className="mt-2">
+							{character.referenceImageUrl ? (
+								<div className="relative">
+									{/* biome-ignore lint/performance/noImgElement: dynamic external URLs */}
+									<img
+										src={character.referenceImageUrl}
+										alt={character.name}
+										className="w-full h-24 object-cover rounded border border-zinc-700"
+									/>
+									<label className="absolute bottom-1 right-1 px-2 py-0.5 bg-zinc-900/80 rounded text-[10px] text-zinc-400 cursor-pointer hover:text-white">
+										Change
+										<input
+											type="file"
+											accept="image/*"
+											className="hidden"
+											onChange={(event) =>
+												handleReferenceSelect(
+													event,
+													character.charId,
+												)
+											}
+										/>
+									</label>
+								</div>
+							) : (
+								<label className="block w-full p-2 border border-dashed border-zinc-700 rounded text-[10px] text-zinc-500 text-center cursor-pointer hover:border-zinc-500 hover:text-zinc-400">
+									Add reference image
+									<input
+										type="file"
+										accept="image/*"
+										className="hidden"
+										onChange={(event) =>
+											handleReferenceSelect(
+												event,
+												character.charId,
+											)
+										}
+									/>
+								</label>
+							)}
+						</div>
 					</div>
 				))}
 			</div>

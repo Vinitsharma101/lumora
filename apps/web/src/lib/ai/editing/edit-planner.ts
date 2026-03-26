@@ -12,7 +12,6 @@ import type {
 	TimelineMetrics,
 	EditPlan,
 	PlanAction,
-	FrontendStyleProfile,
 } from "./types";
 import { getStyleProfile } from "./style-profiles";
 
