@@ -137,33 +137,36 @@ function PreviewCanvas({
 	const renderTree = editor.renderer.getRenderTree();
 
 	const render = useCallback(() => {
-		if (canvasRef.current && renderTree && !renderingRef.current) {
-			const time = editor.playback.getCurrentTime();
-			const lastFrameTime = getLastFrameTime({
-				duration: renderTree.duration,
-				fps: renderer.fps,
-			});
-			const renderTime = Math.min(time, lastFrameTime);
-			const frame = Math.floor(renderTime * renderer.fps);
+		const canvas = canvasRef.current;
+		if (!canvas || !renderTree || renderingRef.current) return;
 
-			if (
-				frame !== lastFrameRef.current ||
-				renderTree !== lastSceneRef.current
-			) {
-				renderingRef.current = true;
-				lastSceneRef.current = renderTree;
-				lastFrameRef.current = frame;
-				renderer
-					.renderToCanvas({
-						node: renderTree,
-						time: renderTime,
-						targetCanvas: canvasRef.current,
-					})
-					.then(() => {
-						renderingRef.current = false;
-					});
-			}
+		const time = editor.playback.getCurrentTime();
+		const lastFrameTime = getLastFrameTime({
+			duration: renderTree.duration,
+			fps: renderer.fps,
+		});
+		const renderTime = Math.min(time, lastFrameTime);
+		const frame = Math.floor(renderTime * renderer.fps);
+
+		if (
+			frame === lastFrameRef.current &&
+			renderTree === lastSceneRef.current
+		) {
+			return;
 		}
+
+		renderingRef.current = true;
+		lastSceneRef.current = renderTree;
+		lastFrameRef.current = frame;
+		renderer
+			.renderToCanvas({
+				node: renderTree,
+				time: renderTime,
+				targetCanvas: canvas,
+			})
+			.then(() => {
+				renderingRef.current = false;
+			});
 	}, [renderer, renderTree, editor.playback]);
 
 	useRafLoop(render);

@@ -56,15 +56,15 @@ export function FiltersView() {
 				const existingEffects: Array<{ id: string; type: string; intensity?: number }> =
 					element?.effects || [];
 
-				// Remove any existing filter of the same id, then add
-				const withoutExisting = existingEffects.filter((e) => e.id !== filter.id);
+				// Keep non-filter effects, replace any existing filter with the new one
+				const nonFilterEffects = existingEffects.filter((e) => !e.type.startsWith("filter-"));
 
 				return {
 					trackId: el.trackId,
 					elementId: el.elementId,
 					updates: {
 						effects: [
-							...withoutExisting,
+							...nonFilterEffects,
 							{
 								id: filter.id,
 								type: filter.type,
@@ -132,6 +132,8 @@ export function FiltersView() {
 
 	const appliedFilters = getAppliedFilters();
 
+	const hasSelection = activeElements.length > 0;
+
 	return (
 		<div className="flex h-full flex-col">
 			{/* Header */}
@@ -141,10 +143,22 @@ export function FiltersView() {
 					Filters
 				</h2>
 				<p className="text-muted-foreground mt-1 text-xs">
-					Select a clip to apply color filters.
+					{hasSelection
+						? "Click a filter to apply it to the selected clip."
+						: "Select a clip on the timeline to apply filters."}
 				</p>
 			</div>
 
+			{!hasSelection && (
+				<div className="flex flex-1 flex-col items-center justify-center gap-3 p-6">
+					<HugeiconsIcon icon={ColorsIcon} className="text-muted-foreground size-10" />
+					<p className="text-muted-foreground text-center text-sm">
+						No clip selected. Click a clip on the timeline first.
+					</p>
+				</div>
+			)}
+
+			{hasSelection && (<>
 			{/* Search */}
 			<div className="px-4 pt-3 pb-2">
 				<div className="relative">
@@ -286,6 +300,7 @@ export function FiltersView() {
 					</div>
 				)}
 			</ScrollArea>
+			</>)}
 		</div>
 	);
 }

@@ -1,20 +1,24 @@
 import { useEffect, useRef } from "react";
 
 export function useRafLoop(callback: ({ time }: { time: number }) => void) {
-	const requestRef = useRef<number>(0);
-	const previousTimeRef = useRef<number | null>(null);
+	const callbackRef = useRef(callback);
+	callbackRef.current = callback;
 
 	useEffect(() => {
-		const loop = ({ time }: { time: number }) => {
-			if (previousTimeRef.current !== null) {
-				const deltaTime = time - previousTimeRef.current;
-				callback({ time: deltaTime });
+		let rafId = 0;
+		let previousTime: number | null = null;
+		const arg = { time: 0 };
+
+		const loop = (time: number) => {
+			if (previousTime !== null) {
+				arg.time = time - previousTime;
+				callbackRef.current(arg);
 			}
-			previousTimeRef.current = time;
-			requestRef.current = requestAnimationFrame((time) => loop({ time }));
+			previousTime = time;
+			rafId = requestAnimationFrame(loop);
 		};
 
-		requestRef.current = requestAnimationFrame((time) => loop({ time }));
-		return () => cancelAnimationFrame(requestRef.current);
-	}, [callback]);
+		rafId = requestAnimationFrame(loop);
+		return () => cancelAnimationFrame(rafId);
+	}, []);
 }

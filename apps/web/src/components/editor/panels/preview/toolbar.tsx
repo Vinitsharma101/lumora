@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor } from "@/hooks/use-editor";
 import { formatTimeCode } from "@/lib/time";
 import { invokeAction } from "@/lib/actions";
@@ -14,6 +15,30 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { OcSocialIcon } from "@grace-studio/ui/icons";
 import { Separator } from "@/components/ui/separator";
 
+function useFpsCounter(): number {
+	const [fps, setFps] = useState(0);
+	const stateRef = useRef({ frames: 0, lastTime: performance.now() });
+
+	useEffect(() => {
+		let rafId = 0;
+		const tick = (now: number) => {
+			const state = stateRef.current;
+			state.frames++;
+			const delta = now - state.lastTime;
+			if (delta >= 1000) {
+				setFps(Math.round((state.frames * 1000) / delta));
+				state.frames = 0;
+				state.lastTime = now;
+			}
+			rafId = requestAnimationFrame(tick);
+		};
+		rafId = requestAnimationFrame(tick);
+		return () => cancelAnimationFrame(rafId);
+	}, []);
+
+	return fps;
+}
+
 export function PreviewToolbar({
 	isFullscreen,
 	onToggleFullscreen,
@@ -25,7 +50,8 @@ export function PreviewToolbar({
 	const isPlaying = editor.playback.getIsPlaying();
 	const currentTime = editor.playback.getCurrentTime();
 	const totalDuration = editor.timeline.getTotalDuration();
-	const fps = editor.project.getActive().settings.fps;
+	const projectFps = editor.project.getActive().settings.fps;
+	const renderFps = useFpsCounter();
 
 	return (
 		<div className="grid grid-cols-[1fr_auto_1fr] items-center pb-3 pt-5 px-5">
@@ -34,7 +60,7 @@ export function PreviewToolbar({
 					time={currentTime}
 					duration={totalDuration}
 					format="HH:MM:SS:FF"
-					fps={fps}
+					fps={projectFps}
 					onTimeChange={({ time }) => editor.playback.seek({ time })}
 					className="text-center"
 				/>
@@ -43,7 +69,7 @@ export function PreviewToolbar({
 					{formatTimeCode({
 						timeInSeconds: totalDuration,
 						format: "HH:MM:SS:FF",
-						fps,
+						fps: projectFps,
 					})}
 				</span>
 			</div>
@@ -57,6 +83,13 @@ export function PreviewToolbar({
 			</Button>
 
 			<div className="justify-self-end flex items-center gap-2.5">
+				<span
+					className="font-mono text-[10px] tabular-nums text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5"
+					title="Rendering FPS"
+				>
+					{renderFps} FPS
+				</span>
+				<Separator orientation="vertical" className="h-4" />
 				<Button
 					variant="secondary"
 					size="sm"

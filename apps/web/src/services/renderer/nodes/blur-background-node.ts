@@ -9,11 +9,40 @@ export type BlurBackgroundNodeParams = {
 export class BlurBackgroundNode extends BaseNode<BlurBackgroundNodeParams> {
 	private blurIntensity: number;
 	private contentNodes: BaseNode[];
+	private offscreen: OffscreenCanvas | HTMLCanvasElement | null = null;
+	private offscreenCtx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null = null;
+	private cachedWidth = 0;
+	private cachedHeight = 0;
 
 	constructor(params: BlurBackgroundNodeParams) {
 		super(params);
 		this.blurIntensity = params.blurIntensity;
 		this.contentNodes = params.contentNodes;
+	}
+
+	private ensureOffscreen(width: number, height: number): void {
+		if (this.offscreen && this.cachedWidth === width && this.cachedHeight === height) {
+			const ctx = this.offscreenCtx!;
+			ctx.clearRect(0, 0, width, height);
+			return;
+		}
+
+		try {
+			this.offscreen = new OffscreenCanvas(width, height);
+			const ctx = this.offscreen.getContext("2d");
+			if (!ctx) throw new Error("failed to get offscreen canvas context");
+			this.offscreenCtx = ctx;
+		} catch {
+			this.offscreen = document.createElement("canvas");
+			this.offscreen.width = width;
+			this.offscreen.height = height;
+			const ctx = this.offscreen.getContext("2d");
+			if (!ctx) throw new Error("failed to get canvas context");
+			this.offscreenCtx = ctx;
+		}
+
+		this.cachedWidth = width;
+		this.cachedHeight = height;
 	}
 
 	async render({
@@ -23,31 +52,10 @@ export class BlurBackgroundNode extends BaseNode<BlurBackgroundNodeParams> {
 		renderer: CanvasRenderer;
 		time: number;
 	}): Promise<void> {
-		let offscreen: OffscreenCanvas | HTMLCanvasElement;
-		let offscreenCtx:
-			| OffscreenCanvasRenderingContext2D
-			| CanvasRenderingContext2D;
-
-		try {
-			offscreen = new OffscreenCanvas(renderer.width, renderer.height);
-			const ctx = offscreen.getContext("2d");
-			if (!ctx) {
-				throw new Error("failed to get offscreen canvas context");
-			}
-			offscreenCtx = ctx;
-		} catch {
-			offscreen = document.createElement("canvas");
-			offscreen.width = renderer.width;
-			offscreen.height = renderer.height;
-			const ctx = offscreen.getContext("2d");
-			if (!ctx) {
-				throw new Error("failed to get canvas context");
-			}
-			offscreenCtx = ctx;
-		}
+		this.ensureOffscreen(renderer.width, renderer.height);
 
 		const originalContext = renderer.context;
-		renderer.context = offscreenCtx;
+		renderer.context = this.offscreenCtx!;
 
 		for (const node of this.contentNodes) {
 			await node.render({ renderer, time });
@@ -64,7 +72,7 @@ export class BlurBackgroundNode extends BaseNode<BlurBackgroundNodeParams> {
 		renderer.context.save();
 		renderer.context.filter = `blur(${this.blurIntensity}px)`;
 		renderer.context.drawImage(
-			offscreen as CanvasImageSource,
+			this.offscreen as CanvasImageSource,
 			offsetX,
 			offsetY,
 			scaledWidth,

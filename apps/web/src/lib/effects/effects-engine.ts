@@ -31,7 +31,22 @@ type EffectContext = {
  * Build a CSS filter string from an array of effects.
  * Used for effects that map directly to Canvas 2D filter property.
  */
+const filterStringCache = new WeakMap<Effect[], { key: string; result: string }>();
+
+function getEffectsCacheKey(effects: Effect[]): string {
+	let key = "";
+	for (let i = 0; i < effects.length; i++) {
+		const e = effects[i];
+		key += `${e.type}:${e.intensity ?? 1}|`;
+	}
+	return key;
+}
+
 export function buildFilterString(effects: Effect[]): string {
+	const cacheKey = getEffectsCacheKey(effects);
+	const cached = filterStringCache.get(effects);
+	if (cached && cached.key === cacheKey) return cached.result;
+
 	const filters: string[] = [];
 
 	for (const effect of effects) {
@@ -187,7 +202,9 @@ export function buildFilterString(effects: Effect[]): string {
 		}
 	}
 
-	return filters.join(" ");
+	const result = filters.join(" ");
+	filterStringCache.set(effects, { key: cacheKey, result });
+	return result;
 }
 
 /**
@@ -567,64 +584,64 @@ function applyLensFlare(
 	ctx.restore();
 }
 
+const OVERLAY_TYPES = new Set([
+	"film-grain",
+	"vignette",
+	"light-leaks",
+	"fog-overlay",
+	"sparkle",
+	"lens-flare",
+]);
+
+const FILTER_TYPES = new Set([
+	"blur",
+	"grayscale",
+	"sepia",
+	"brightness",
+	"contrast",
+	"hdr-enhancement",
+	"sharpen",
+	"color-grading",
+	"cinematic-lut",
+	"golden-hour",
+	"night-cinematic",
+	"vintage-film",
+	"teal-orange",
+	"fade-film",
+	"warm-tone",
+	"cool-tone",
+	"dream-glow",
+	"motion-blur",
+]);
+
+const TRANSFORM_TYPES = new Set([
+	"zoom-in",
+	"zoom-out",
+	"ken-burns",
+	"camera-shake",
+	"parallax",
+	"dolly-zoom",
+]);
+
 /**
  * Check whether an effect needs post-processing overlay rendering.
  */
 export function isOverlayEffect(effectType: string): boolean {
-	const overlayTypes = new Set([
-		"film-grain",
-		"vignette",
-		"light-leaks",
-		"fog-overlay",
-		"sparkle",
-		"lens-flare",
-	]);
-	return overlayTypes.has(effectType);
+	return OVERLAY_TYPES.has(effectType);
 }
 
 /**
  * Check whether an effect uses CSS filter strings.
  */
 export function isFilterEffect(effectType: string): boolean {
-	// Filter-* types from the Filters panel
 	if (effectType.startsWith("filter-")) return true;
-	// Adjust-* types from the Adjustment panel
 	if (effectType.startsWith("adjust-")) return true;
-
-	const filterTypes = new Set([
-		"blur",
-		"grayscale",
-		"sepia",
-		"brightness",
-		"contrast",
-		"hdr-enhancement",
-		"sharpen",
-		"color-grading",
-		"cinematic-lut",
-		"golden-hour",
-		"night-cinematic",
-		"vintage-film",
-		"teal-orange",
-		"fade-film",
-		"warm-tone",
-		"cool-tone",
-		"dream-glow",
-		"motion-blur",
-	]);
-	return filterTypes.has(effectType);
+	return FILTER_TYPES.has(effectType);
 }
 
 /**
  * Check whether an effect needs transform modifications.
  */
 export function isTransformEffect(effectType: string): boolean {
-	const transformTypes = new Set([
-		"zoom-in",
-		"zoom-out",
-		"ken-burns",
-		"camera-shake",
-		"parallax",
-		"dolly-zoom",
-	]);
-	return transformTypes.has(effectType);
+	return TRANSFORM_TYPES.has(effectType);
 }

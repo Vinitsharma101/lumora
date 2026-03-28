@@ -295,9 +295,9 @@ function SoundEffectsView() {
 						{isSearching && searchQuery && (
 							<div className="text-muted-foreground text-sm">Searching...</div>
 						)}
-						{displayedSounds.map((sound) => (
+						{displayedSounds.map((sound, index) => (
 							<AudioItem
-								key={sound.id}
+								key={`${sound.id}-${index}`}
 								sound={sound}
 								isPlaying={playingId === sound.id}
 								onPlay={playSound}
@@ -528,7 +528,13 @@ function SongsView() {
 				);
 				if (response.ok) {
 					const data = await response.json();
-					setSongs((previous) => [...previous, ...data.results]);
+					setSongs((previous) => {
+						const existingIds = new Set(previous.map((s) => s.id));
+						const newSongs = data.results.filter(
+							(s: SoundEffect) => !existingIds.has(s.id),
+						);
+						return [...previous, ...newSongs];
+					});
 					setPage(nextPage);
 					setHasNextPage(!!data.next);
 				}
@@ -642,9 +648,9 @@ function SongsView() {
 								Loading songs...
 							</div>
 						)}
-						{songs.map((sound) => (
+						{songs.map((sound, index) => (
 							<AudioItem
-								key={sound.id}
+								key={`${sound.id}-${index}`}
 								sound={sound}
 								isPlaying={playingId === sound.id}
 								onPlay={playSound}

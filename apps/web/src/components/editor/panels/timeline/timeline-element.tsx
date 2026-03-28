@@ -43,9 +43,11 @@ import {
 	Search01Icon,
 	Exchange01Icon,
 	AiBrainIcon,
+	MusicNote03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { uppercase } from "@/utils/string";
+import { ExtractAudioCommand } from "@/lib/commands/timeline/element/extract-audio";
 import type { ComponentProps } from "react";
 import { useAIChatStore } from "@/stores/ai-chat-store";
 import type { AIPendingContext } from "@/stores/ai-chat-store";
@@ -137,6 +139,12 @@ export function TimelineElement({
 		}
 	};
 
+	const handleExtractAudio = (event: React.MouseEvent) => {
+		event.stopPropagation();
+		const command = new ExtractAudioCommand(track.id, element.id);
+		editor.command.execute({ command });
+	};
+
 	const handleAskAI = (event: React.MouseEvent) => {
 		event.stopPropagation();
 
@@ -198,6 +206,7 @@ export function TimelineElement({
 	};
 
 	const isMuted = canElementHaveAudio(element) && element.muted === true;
+	const canExtractAudio = element.type === "video" && hasAudio && !isMuted;
 
 	return (
 		<ContextMenu>
@@ -240,6 +249,14 @@ export function TimelineElement({
 						isCurrentElementSelected={isCurrentElementSelected}
 						isMuted={isMuted}
 					/>
+				)}
+				{canExtractAudio && selectedElements.length === 1 && (
+					<ContextMenuItem
+						icon={<HugeiconsIcon icon={MusicNote03Icon} />}
+						onClick={handleExtractAudio}
+					>
+						Extract audio
+					</ContextMenuItem>
 				)}
 				{canElementBeHidden(element) && (
 					<VisibilityMenuItem
@@ -343,21 +360,20 @@ function ElementInner({
 					/>
 				</div>
 
-				{(hasAudio
-					? isMuted
-					: canElementBeHidden(element) && element.hidden) && (
+				{hasAudio && isMuted && track.type === "audio" && (
 					<div className="bg-opacity-50 pointer-events-none absolute inset-0 flex items-center justify-center bg-black">
-						{hasAudio ? (
-							<HugeiconsIcon
-								icon={VolumeHighIcon}
-								className="size-6 text-white"
-							/>
-						) : (
-							<HugeiconsIcon
-								icon={VolumeOffIcon}
-								className="size-6 text-white"
-							/>
-						)}
+						<HugeiconsIcon
+							icon={VolumeMute02Icon}
+							className="size-6 text-white"
+						/>
+					</div>
+				)}
+				{canElementBeHidden(element) && element.hidden && (
+					<div className="bg-opacity-50 pointer-events-none absolute inset-0 flex items-center justify-center bg-black">
+						<HugeiconsIcon
+							icon={ViewOffSlashIcon}
+							className="size-6 text-white"
+						/>
 					</div>
 				)}
 			</button>

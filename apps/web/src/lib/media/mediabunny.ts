@@ -12,6 +12,7 @@ export async function getVideoInfo({
 	width: number;
 	height: number;
 	fps: number;
+	hasAudio: boolean;
 }> {
 	const input = new Input({
 		source: new BlobSource(videoFile),
@@ -28,11 +29,20 @@ export async function getVideoInfo({
 	const packetStats = await videoTrack.computePacketStats(100);
 	const fps = packetStats.averagePacketRate;
 
+	let hasAudio = false;
+	try {
+		const audioTrack = await input.getPrimaryAudioTrack();
+		hasAudio = !!audioTrack;
+	} catch {
+		hasAudio = false;
+	}
+
 	return {
 		duration,
 		width: videoTrack.displayWidth,
 		height: videoTrack.displayHeight,
 		fps,
+		hasAudio,
 	};
 }
 

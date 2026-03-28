@@ -28,8 +28,17 @@ export class BaseNode<Params extends BaseNodeParams = BaseNodeParams> {
 		renderer: CanvasRenderer;
 		time: number;
 	}): Promise<void> {
-		for (const child of this.children) {
-			await child.render({ renderer, time });
+		// Children share a single canvas context and must draw in order
+		// (back-to-front compositing), so we render sequentially.
+		// However, skip iteration overhead for common cases.
+		const len = this.children.length;
+		if (len === 0) return;
+		if (len === 1) {
+			await this.children[0].render({ renderer, time });
+			return;
+		}
+		for (let i = 0; i < len; i++) {
+			await this.children[i].render({ renderer, time });
 		}
 	}
 }

@@ -66,6 +66,8 @@ export class CanvasRenderer {
 		await node.render({ renderer: this, time });
 	}
 
+	private targetCtxCache = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D>();
+
 	async renderToCanvas({
 		node,
 		time,
@@ -77,9 +79,14 @@ export class CanvasRenderer {
 	}) {
 		await this.render({ node, time });
 
-		const ctx = targetCanvas.getContext("2d");
+		let ctx = this.targetCtxCache.get(targetCanvas);
 		if (!ctx) {
-			throw new Error("Failed to get target canvas context");
+			const newCtx = targetCanvas.getContext("2d");
+			if (!newCtx) {
+				throw new Error("Failed to get target canvas context");
+			}
+			ctx = newCtx;
+			this.targetCtxCache.set(targetCanvas, ctx);
 		}
 
 		ctx.drawImage(this.canvas, 0, 0, targetCanvas.width, targetCanvas.height);
