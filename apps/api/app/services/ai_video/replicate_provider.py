@@ -28,6 +28,10 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_result(status: str, output=None, error: str | None = None, **extra) -> dict:
+    return {"status": status, "output": output or [], "error": error, **extra}
+
 # ── Model Registry ────────────────────────────────────────────────────────────
 MODEL_REGISTRY = {
     "text_to_image": {
@@ -103,6 +107,12 @@ class ReplicateProvider:
         if not self.client:
             raise RuntimeError("REPLICATE_API_TOKEN not configured")
 
+    def _ensure_allowed_model(self, model: str) -> str:
+        allowed = {v for group in MODEL_REGISTRY.values() for v in group.values()}
+        if model not in allowed:
+            raise ValueError(f"Unsupported Replicate model: {model}")
+        return model
+
     # ── Core: Run and Wait ──
 
     async def run_and_wait(
@@ -117,6 +127,7 @@ class ReplicateProvider:
         when they need to block until the result is ready.
         """
         self._ensure_client()
+        model = self._ensure_allowed_model(model)
 
         prediction = await asyncio.to_thread(
             self.client.predictions.create,
@@ -137,13 +148,7 @@ class ReplicateProvider:
             else:
                 output_url = None
 
-            return {
-                "provider": "replicate",
-                "prediction_id": prediction.id,
-                "status": "succeeded",
-                "output": output,
-                "output_url": output_url,
-            }
+            return _normalize_result("succeeded", output=output, provider="replicate", prediction_id=prediction.id, output_url=output_url)
 
         error = result.get("error") or f"Prediction ended with status: {result['status']}"
         raise RuntimeError(f"Replicate prediction {prediction.id} failed: {error}")
@@ -164,11 +169,7 @@ class ReplicateProvider:
             model=model,
             input=input_data,
         )
-        return {
-            "provider": "replicate",
-            "prediction_id": prediction.id,
-            "status": prediction.status,
-        }
+        return _normalize_result(prediction.status, output=[], provider="replicate", prediction_id=prediction.id)
 
     # ── Luma Dream Machine (Text-to-Video) ──
 
@@ -186,11 +187,7 @@ class ReplicateProvider:
             model=model,
             input=input_data,
         )
-        return {
-            "provider": "replicate",
-            "prediction_id": prediction.id,
-            "status": prediction.status,
-        }
+        return _normalize_result(prediction.status, output=[], provider="replicate", prediction_id=prediction.id)
 
     # ── Luma Dream Machine (Image-to-Video) ──
 
@@ -210,11 +207,7 @@ class ReplicateProvider:
             model=model,
             input=input_data,
         )
-        return {
-            "provider": "replicate",
-            "prediction_id": prediction.id,
-            "status": prediction.status,
-        }
+        return _normalize_result(prediction.status, output=[], provider="replicate", prediction_id=prediction.id)
 
     # ── Image-to-Video ──
 
@@ -272,12 +265,7 @@ class ReplicateProvider:
             model=model_id,
             input=input_data,
         )
-        return {
-            "provider": "replicate",
-            "prediction_id": prediction.id,
-            "status": prediction.status,
-            "model": model_id,
-        }
+        return _normalize_result(prediction.status, output=[], provider="replicate", prediction_id=prediction.id, model=model_id)
 
     # ── Video-to-Video ──
 

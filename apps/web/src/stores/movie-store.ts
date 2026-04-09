@@ -248,7 +248,14 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 				});
 
 				if (!response.ok) {
-					throw new Error(`Failed to start pipeline: ${response.statusText}`);
+					const errorBody = await response.json().catch(() => null);
+					const detail =
+						typeof errorBody?.detail === "string"
+							? errorBody.detail
+							: typeof errorBody?.error === "string"
+								? errorBody.error
+								: response.statusText;
+					throw new Error(`Failed to start pipeline: ${detail}`);
 				}
 
 				const data = await response.json();
@@ -257,7 +264,8 @@ export const useMovieStore = create<MovieState & MovieActions>((set, get) => {
 			} catch (error) {
 				set({
 					status: "failed",
-					error: error instanceof Error ? error.message : "Unknown error",
+					error:
+						error instanceof Error ? error.message : "Unknown pipeline error",
 				});
 			}
 		},

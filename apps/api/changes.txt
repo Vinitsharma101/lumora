@@ -1,0 +1,96 @@
+AI Video Preview + Finalize Worklog
+
+What I changed
+- I updated the backend video-generation flow to support preview frames first, then final video creation after confirmation.
+- I kept the UI unchanged and only touched backend code.
+
+Files changed
+- `apps/api/app/schemas/ai_video.py`
+- `apps/api/app/routers/ai_video.py`
+- `apps/api/app/worker.py`
+- `apps/api/app/services/ai_video/google_provider.py`
+- `apps/api/app/services/ai_video/replicate_provider.py`
+- `apps/api/app/ai/providers/gemini.py`
+
+Why those files changed
+- `schemas/ai_video.py` needed to accept all provider values used by the worker, including `luma`.
+- `routers/ai_video.py` needed to pass the new `action` flag into the job payload.
+- `worker.py` needed the actual preview/finalize logic, FFmpeg handling, retries, logging, and cleanup.
+- `google_provider.py`, `replicate_provider.py`, and `gemini.py` needed stronger API-key validation and normalized outputs.
+
+Preview flow
+- A `text_to_video` request now enters preview mode by default.
+- The worker generates ordered preview frames using existing provider methods.
+- Frames are capped to a maximum of 60.
+- Each frame stores an ordered identifier and a stable output reference.
+- Job status becomes `preview_ready`.
+
+Finalize flow
+- The same job can be finalized with `action=finalize`.
+- The worker reuses stored preview frames instead of regenerating them.
+- The worker validates frame order, checks FFmpeg availability, and converts frames into a final video.
+- The final video URL is stored back on the job as `final_video_url`.
+- Job status becomes `completed`.
+
+Provider reliability updates
+- Replicate now validates allowed model IDs before execution.
+- Replicate responses now use a consistent `status / output / error` shape.
+- Google provider responses now use the same normalized shape.
+- Gemini now fails clearly if the Google API key is missing.
+- FFmpeg is checked before final video creation so failures are explicit.
+
+Error handling
+- Frame generation retries are limited and logged.
+- Missing frame URLs fail clearly.
+- Missing FFmpeg fails clearly.
+- Temporary frame files are cleaned up automatically after use.
+
+Logging added
+- Job start
+- Preview frame generation
+- Final video generation
+- Provider responses and retry failures
+
+How the flow works now
+- Request enters `app/routers/ai_video.py`.
+- Router stores the job and passes `action` and provider data.
+- Worker runs preview mode or finalize mode.
+- Preview mode returns frame references.
+- Finalize mode builds the video from stored preview frames.
+- Job record stores the final output.
+
+How to verify
+- Send `POST /api/ai/video/text-to-video` with default preview mode.
+- Confirm the job becomes `preview_ready`.
+- Send the same flow with `action=finalize`.
+- Confirm the job becomes `completed` and `final_video_url` is present.
+- Confirm `GOOGLE_AI_API_KEY` and `REPLICATE_API_TOKEN` are set before testing provider paths.
+
+Notes
+- No endpoint names changed.
+- No UI changed.
+- The existing job system is still the source of truth.
+
+Frontend Step 1 Plan
+- Files to update: `apps/web/src/components/editor/panels/assets/views/ai-generate.tsx`, `apps/web/src/lib/cloud-api.ts`.
+- Why: the AI Generate panel must call the real typed API client and send `action=preview` so it matches the backend preview flow.
+- What changes: replace the mock `/api/ai/video` call, pass the backend request shape (`prompt`, `duration`, `aspect_ratio`, `provider`, `action`), and keep the existing UI layout intact.
+- How to check: submit a text-to-video request and confirm the network payload includes `action: "preview"` and the returned job ID is stored for polling.
+
+Frontend Step 2 Plan
+- Files to update: `apps/web/src/components/editor/panels/assets/views/ai-generate.tsx`.
+- Why: the frontend must render the `preview_ready` response so the user can see the generated frames before confirming.
+- What changes: show preview frame thumbnails in the job card, keep polling aware of `preview_ready`, and keep the existing layout unchanged.
+- How to check: run a preview job and confirm the UI shows image thumbnails under the job entry.
+
+Frontend Step 3 Plan
+- Files to update: `apps/web/src/components/editor/panels/assets/views/ai-generate.tsx`, `apps/web/src/lib/cloud-api.ts`.
+- Why: the UI needs a confirm/finalize action that reuses the stored preview job and triggers the backend finalize path.
+- What changes: add a `Finalize Video` button for preview jobs, send `action=finalize` plus `source_job_id`, and start polling the new finalize job.
+- How to check: click finalize on a preview job and confirm the backend returns a completed job with `final_video_url`.
+
+Frontend Step 4 Plan
+- Files to update: `apps/web/src/components/editor/panels/assets/views/ai-generate.tsx`.
+- Why: the job list should clearly show the preview and final states so the user knows what stage the workflow is in.
+- What changes: give `preview_ready` its own visual state and show a link to the final video when the job is completed.
+- How to check: run the full preview/finalize flow and confirm the badge color changes and the final video link appears after completion.

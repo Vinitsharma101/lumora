@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -17,9 +18,10 @@ import {
 	type AspectRatio,
 	type StylePresetKey,
 } from "@/stores/image-gen-store";
+import { apiFetch } from "@/lib/api-client";
 import { StyleReferenceSection } from "./style-reference-section";
 
-/** Call the Next.js generate-image API route directly */
+/** Call the real backend AI route directly */
 async function generateImageViaNextAPI(params: {
 	prompt: string;
 	provider?: string;
@@ -29,26 +31,34 @@ async function generateImageViaNextAPI(params: {
 	stylePreset?: string;
 	styleReferenceUrls?: string[];
 	seed?: number;
+	sourceImageUrl?: string;
 }): Promise<{
 	jobId: string;
 	status: string;
 	imageUrl?: string;
 	mockImageUrl?: string;
 }> {
-	const response = await fetch("/api/ai/generate-image", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			prompt: params.prompt,
-			provider: params.provider,
-			aspectRatio: params.aspectRatio,
-			numImages: params.numImages,
-			negativePrompt: params.negativePrompt,
-			stylePreset: params.stylePreset,
-			styleReferenceUrls: params.styleReferenceUrls,
-			seed: params.seed,
-		}),
-	});
+	const response = await apiFetch(
+		params.sourceImageUrl
+			? "/api/ai/video/edit-image"
+			: "/api/ai/video/text-to-image",
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				prompt: params.prompt,
+				provider: params.provider,
+				aspectRatio: params.aspectRatio,
+				numImages: params.numImages,
+				negativePrompt: params.negativePrompt,
+				stylePreset: params.stylePreset,
+				styleReferenceUrls: params.styleReferenceUrls,
+				seed: params.seed,
+				source_image_url: params.sourceImageUrl,
+				edit_prompt: params.sourceImageUrl ? params.prompt : undefined,
+			}),
+		},
+	);
 	if (!response.ok) {
 		throw new Error(`API error ${response.status}`);
 	}
@@ -69,9 +79,24 @@ const ASPECT_RATIOS: { value: AspectRatio; label: string }[] = [
 	{ value: "3:4", label: "3:4" },
 ];
 
-const NUM_IMAGE_OPTIONS = [1, 2, 4] as const;
+const NUM_IMAGE_OPTIONS = [1, 2, 4, 5] as const;
+const VARIANT_SUFFIXES = [
+	"close-up composition",
+	"wide scene",
+	"alternate angle",
+	"different lighting",
+	"more dynamic framing",
+] as const;
 
 const PRESET_KEYS = Object.keys(STYLE_PRESETS) as StylePresetKey[];
+
+function buildPromptVariants(prompt: string, count: number): string[] {
+	if (count <= 1) return [prompt];
+	return Array.from({ length: count }, (_, index) => {
+		const suffix = VARIANT_SUFFIXES[index % VARIANT_SUFFIXES.length];
+		return `${prompt}, ${suffix}`;
+	});
+}
 
 export function ControlsPanel() {
 	const [prompt, setPrompt] = useState("");
@@ -109,65 +134,82 @@ export function ControlsPanel() {
 
 		try {
 			addPromptToHistory(prompt.trim());
+			const promptVariants = buildPromptVariants(prompt.trim(), numImages);
 
 			if (isEditMode && selectedImage) {
-				// Edit mode: send the source image URL along with the edit prompt
-				const response = await generateImageViaNextAPI({
-					prompt: `Edit: ${prompt.trim()} [source: ${selectedImage.urls[0]}]`,
-					provider: activeProvider,
-				});
+				const responses = await Promise.all(
+					promptVariants.map((variantPrompt) =>
+						generateImageViaNextAPI({
+							prompt: variantPrompt,
+							provider: activeProvider,
+							sourceImageUrl: selectedImage.urls[0],
+						}),
+					),
+				);
 
-				const imageId = crypto.randomUUID();
-				const resolvedUrls =
-					response.status === "completed" && response.imageUrl
-						? [response.imageUrl]
-						: response.status === "mock" && response.mockImageUrl
-							? [response.mockImageUrl]
-							: [];
+				responses.forEach((response, index) => {
+					const imageId = crypto.randomUUID();
+					const jobId =
+						response.jobId ?? (response as { job_id?: string }).job_id ?? null;
+					const resolvedUrls =
+						response.status === "completed" && response.imageUrl
+							? [response.imageUrl]
+							: response.status === "mock" && response.mockImageUrl
+								? [response.mockImageUrl]
+								: [];
 
-				addImage({
-					id: imageId,
-					prompt: prompt.trim(),
-					provider: activeProvider,
-					status: resolvedUrls.length > 0 ? "completed" : "generating",
-					urls: resolvedUrls,
-					jobId: resolvedUrls.length > 0 ? null : response.jobId,
-					parentImageId: selectedImage.id,
-					errorMessage: null,
-					createdAt: Date.now(),
+					addImage({
+						id: imageId,
+						prompt: promptVariants[index],
+						provider: activeProvider,
+						status: resolvedUrls.length > 0 ? "completed" : "generating",
+						urls: resolvedUrls,
+						jobId: resolvedUrls.length > 0 ? null : jobId,
+						parentImageId: selectedImage.id,
+						errorMessage: null,
+						createdAt: Date.now(),
+					});
 				});
 			} else {
 				const styleRefUrls = styleReferenceImages.map((ref) => ref.url);
-				const response = await generateImageViaNextAPI({
-					prompt: prompt.trim(),
-					provider: activeProvider,
-					aspectRatio,
-					numImages,
-					negativePrompt: negativePrompt || undefined,
-					stylePreset: stylePreset ?? undefined,
-					styleReferenceUrls:
-						styleRefUrls.length > 0 ? styleRefUrls : undefined,
-					seed: seed ?? undefined,
-				});
+				const responses = await Promise.all(
+					promptVariants.map((variantPrompt) =>
+						generateImageViaNextAPI({
+							prompt: variantPrompt,
+							provider: activeProvider,
+							aspectRatio,
+							numImages: 1,
+							negativePrompt: negativePrompt || undefined,
+							stylePreset: stylePreset ?? undefined,
+							styleReferenceUrls:
+								styleRefUrls.length > 0 ? styleRefUrls : undefined,
+							seed: seed ?? undefined,
+						}),
+					),
+				);
 
-				const imageId = crypto.randomUUID();
-				const resolvedUrls =
-					response.status === "completed" && response.imageUrl
-						? [response.imageUrl]
-						: response.status === "mock" && response.mockImageUrl
-							? [response.mockImageUrl]
-							: [];
+				responses.forEach((response, index) => {
+					const imageId = crypto.randomUUID();
+					const jobId =
+						response.jobId ?? (response as { job_id?: string }).job_id ?? null;
+					const resolvedUrls =
+						response.status === "completed" && response.imageUrl
+							? [response.imageUrl]
+							: response.status === "mock" && response.mockImageUrl
+								? [response.mockImageUrl]
+								: [];
 
-				addImage({
-					id: imageId,
-					prompt: prompt.trim(),
-					provider: activeProvider,
-					status: resolvedUrls.length > 0 ? "completed" : "generating",
-					urls: resolvedUrls,
-					jobId: resolvedUrls.length > 0 ? null : response.jobId,
-					parentImageId: null,
-					errorMessage: null,
-					createdAt: Date.now(),
+					addImage({
+						id: imageId,
+						prompt: promptVariants[index],
+						provider: activeProvider,
+						status: resolvedUrls.length > 0 ? "completed" : "generating",
+						urls: resolvedUrls,
+						jobId: resolvedUrls.length > 0 ? null : jobId,
+						parentImageId: null,
+						errorMessage: null,
+						createdAt: Date.now(),
+					});
 				});
 			}
 
@@ -185,10 +227,14 @@ export function ControlsPanel() {
 			<div className="flex-1 overflow-y-auto p-3 space-y-4">
 				{/* Prompt */}
 				<div className="space-y-1.5">
-					<label className="text-xs font-medium text-muted-foreground">
+					<label
+						htmlFor="ai-image-prompt"
+						className="text-xs font-medium text-muted-foreground"
+					>
 						Prompt
 					</label>
 					<Textarea
+						id="ai-image-prompt"
 						value={prompt}
 						onChange={(event) => setPrompt(event.target.value)}
 						placeholder={
@@ -208,9 +254,9 @@ export function ControlsPanel() {
 
 				{/* Aspect Ratio */}
 				<div className="space-y-1.5">
-					<label className="text-xs font-medium text-muted-foreground">
+					<div className="text-xs font-medium text-muted-foreground">
 						Aspect Ratio
-					</label>
+					</div>
 					<div className="flex flex-wrap gap-1">
 						{ASPECT_RATIOS.map((ratio) => (
 							<Button
@@ -229,9 +275,7 @@ export function ControlsPanel() {
 
 				{/* Style Presets */}
 				<div className="space-y-1.5">
-					<label className="text-xs font-medium text-muted-foreground">
-						Style
-					</label>
+					<div className="text-xs font-medium text-muted-foreground">Style</div>
 					<div className="flex flex-wrap gap-1.5">
 						<Button
 							variant={stylePreset === null ? "default" : "outline"}
@@ -263,7 +307,9 @@ export function ControlsPanel() {
 				{/* Edit mode indicator */}
 				{isEditMode && selectedImage && (
 					<div className="flex items-center gap-2 rounded bg-muted/50 p-2">
-						<img
+						<Image
+							width={32}
+							height={32}
 							src={selectedImage.urls[0]}
 							alt=""
 							className="h-8 w-8 rounded object-cover"
@@ -300,10 +346,14 @@ export function ControlsPanel() {
 					<CollapsibleContent className="mt-2 space-y-3">
 						{/* Negative Prompt */}
 						<div className="space-y-1">
-							<label className="text-xs text-muted-foreground">
+							<label
+								htmlFor="ai-image-negative"
+								className="text-xs text-muted-foreground"
+							>
 								Negative prompt
 							</label>
 							<Textarea
+								id="ai-image-negative"
 								value={negativePrompt}
 								onChange={(event) => setNegativePrompt(event.target.value)}
 								placeholder="Things to avoid in the image..."
@@ -313,10 +363,14 @@ export function ControlsPanel() {
 
 						{/* Seed */}
 						<div className="space-y-1">
-							<label className="text-xs text-muted-foreground">
+							<label
+								htmlFor="ai-image-seed"
+								className="text-xs text-muted-foreground"
+							>
 								Seed (optional)
 							</label>
 							<Input
+								id="ai-image-seed"
 								type="number"
 								value={seed ?? ""}
 								onChange={(event) =>
@@ -333,7 +387,7 @@ export function ControlsPanel() {
 
 						{/* Provider */}
 						<div className="space-y-1">
-							<label className="text-xs text-muted-foreground">Provider</label>
+							<div className="text-xs text-muted-foreground">Provider</div>
 							<div className="flex gap-1">
 								{PROVIDERS.map((provider) => (
 									<Button
@@ -354,9 +408,9 @@ export function ControlsPanel() {
 
 						{/* Image Count */}
 						<div className="space-y-1">
-							<label className="text-xs text-muted-foreground">
+							<div className="text-xs text-muted-foreground">
 								Number of images
-							</label>
+							</div>
 							<div className="flex gap-1">
 								{NUM_IMAGE_OPTIONS.map((count) => (
 									<Button

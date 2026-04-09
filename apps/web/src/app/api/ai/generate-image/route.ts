@@ -5,7 +5,7 @@ const REPLICATE_API_URL = "https://api.replicate.com/v1/predictions";
 
 // FLUX Schnell — fast, high quality image generation
 const FLUX_MODEL_VERSION =
-	"black-forest-labs/flux-schnell";
+	"c846a69991daf4c0e5d016514849d14ee5b2e6846ce6b9d6f21369e564cfe51e";
 
 /**
  * Generate an image via Replicate's FLUX model.
@@ -16,24 +16,17 @@ export async function POST(request: Request) {
 	const prompt = body.prompt as string;
 
 	if (!prompt) {
-		return NextResponse.json(
-			{ error: "prompt is required" },
-			{ status: 400 },
-		);
+		return NextResponse.json({ error: "prompt is required" }, { status: 400 });
 	}
 
 	if (!REPLICATE_API_TOKEN) {
-		// No token — return mock that resolves instantly
-		const mockId = `mock-${crypto.randomUUID()}`;
-		return NextResponse.json({
-			jobId: mockId,
-			status: "mock",
-			mockImageUrl: `https://picsum.photos/seed/${Math.random().toString(36).slice(2, 8)}/1024/768`,
-		});
+		return NextResponse.json(
+			{ error: "Replicate token missing" },
+			{ status: 503 },
+		);
 	}
 
 	try {
-		// Create a prediction via Replicate's API
 		const response = await fetch(REPLICATE_API_URL, {
 			method: "POST",
 			headers: {
@@ -42,7 +35,7 @@ export async function POST(request: Request) {
 				Prefer: "wait",
 			},
 			body: JSON.stringify({
-				model: FLUX_MODEL_VERSION,
+				version: FLUX_MODEL_VERSION,
 				input: {
 					prompt,
 					num_outputs: body.numImages ?? 1,
@@ -56,19 +49,14 @@ export async function POST(request: Request) {
 		if (!response.ok) {
 			const errorText = await response.text();
 			console.error("Replicate API error:", errorText);
-
-			// Fallback to mock on API error
-			const mockId = `mock-${crypto.randomUUID()}`;
-			return NextResponse.json({
-				jobId: mockId,
-				status: "mock",
-				mockImageUrl: `https://picsum.photos/seed/${Math.random().toString(36).slice(2, 8)}/1024/768`,
-			});
+			return NextResponse.json(
+				{ error: errorText },
+				{ status: response.status },
+			);
 		}
 
 		const prediction = await response.json();
 
-		// FLUX Schnell with Prefer: wait returns completed predictions directly
 		if (prediction.status === "succeeded" && prediction.output) {
 			const imageUrls = Array.isArray(prediction.output)
 				? prediction.output
@@ -76,26 +64,20 @@ export async function POST(request: Request) {
 
 			return NextResponse.json({
 				jobId: prediction.id,
+				job_id: prediction.id,
 				status: "completed",
 				imageUrl: imageUrls[0],
 				allUrls: imageUrls,
 			});
 		}
 
-		// If still processing (shouldn't happen with Prefer: wait, but handle it)
 		return NextResponse.json({
 			jobId: prediction.id,
+			job_id: prediction.id,
 			status: prediction.status ?? "processing",
 		});
 	} catch (error) {
 		console.error("Image generation error:", error);
-
-		// Network error — mock fallback
-		const mockId = `mock-${crypto.randomUUID()}`;
-		return NextResponse.json({
-			jobId: mockId,
-			status: "mock",
-			mockImageUrl: `https://picsum.photos/seed/${Math.random().toString(36).slice(2, 8)}/1024/768`,
-		});
+		return NextResponse.json({ error: "API unavailable" }, { status: 503 });
 	}
 }

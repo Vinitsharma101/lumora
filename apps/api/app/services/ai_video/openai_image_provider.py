@@ -26,6 +26,8 @@ class OpenAIImageProvider:
     """OpenAI image generation via gpt-image-1."""
 
     def __init__(self):
+        if not settings.OPENAI_API_KEY:
+            raise RuntimeError("OPENAI_API_KEY not configured")
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     async def text_to_image(

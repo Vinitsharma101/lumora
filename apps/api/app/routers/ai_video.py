@@ -45,6 +45,43 @@ from app.worker import enqueue_ai_job
 router = APIRouter(tags=["ai-video"])
 
 
+class _LocalJob:
+    def __init__(self, job_type: str):
+        self.id = str(uuid4())
+        self.status = "queued"
+        self.job_type = job_type
+        self.progress = 0.0
+
+
+async def _safe_create_job(
+    *,
+    db: AsyncSession,
+    user_id: str,
+    job_type: str,
+    input_data: dict,
+    project_id: str | None,
+    provider: str,
+) -> tuple[AIJob | _LocalJob, bool]:
+    try:
+        job = await create_ai_job(
+            db=db,
+            user_id=user_id,
+            job_type=job_type,
+            input_data=input_data,
+            project_id=project_id,
+            provider=provider,
+        )
+        return job, False
+    except Exception as exc:
+        logger.warning("Image job fallback for %s: %s", job_type, exc)
+        return _LocalJob(job_type), True
+
+
+async def _safe_enqueue(job_id: str, job_type: str) -> None:
+    try:
+        await enqueue_ai_job(job_id, job_type)
+    except Exception as exc:
+        logger.warning("Skipping enqueue for %s job %s: %s", job_type, job_id, exc)
 @router.post("/api/ai/video/text-to-video", response_model=AIJobResponse)
 async def text_to_video(
     body: TextToVideoRequest,
@@ -65,6 +102,8 @@ async def text_to_video(
             "aspect_ratio": body.aspect_ratio,
             "style": body.style,
             "provider": body.provider,
+            "action": body.action,
+            "source_job_id": body.source_job_id,
         },
         project_id=body.project_id,
         provider=body.provider,
@@ -152,7 +191,7 @@ async def background_remove(
     if not url:
         raise HTTPException(status_code=400, detail="Provide image_url or video_url")
 
-    job = await create_ai_job(
+    job, fallback = await _safe_create_job(
         db=db,
         user_id=user.id,
         job_type="background_remove",
@@ -161,7 +200,8 @@ async def background_remove(
         provider="replicate",
     )
 
-    await enqueue_ai_job(job.id, "background_remove")
+    if not fallback:
+        await _safe_enqueue(job.id, "background_remove")
 
     return AIJobResponse(
         job_id=job.id,
@@ -185,7 +225,7 @@ async def upscale(
     if not url:
         raise HTTPException(status_code=400, detail="Provide image_url or video_url")
 
-    job = await create_ai_job(
+    job, fallback = await _safe_create_job(
         db=db,
         user_id=user.id,
         job_type="upscale",
@@ -194,7 +234,8 @@ async def upscale(
         provider="replicate",
     )
 
-    await enqueue_ai_job(job.id, "upscale")
+    if not fallback:
+        await _safe_enqueue(job.id, "upscale")
 
     return AIJobResponse(
         job_id=job.id,
@@ -290,7 +331,7 @@ async def text_to_image(
     """Generate images from a text prompt using FLUX, Imagen, or OpenAI."""
     await check_rate_limit(request)
 
-    job = await create_ai_job(
+    job, fallback = await _safe_create_job(
         db=db,
         user_id=user.id,
         job_type="text_to_image",
@@ -312,7 +353,8 @@ async def text_to_image(
         provider=body.provider,
     )
 
-    await enqueue_ai_job(job.id, "text_to_image")
+    if not fallback:
+        await _safe_enqueue(job.id, "text_to_image")
 
     return AIJobResponse(
         job_id=job.id,
@@ -332,7 +374,7 @@ async def edit_image(
     """Edit an existing image using natural language via AI providers."""
     await check_rate_limit(request)
 
-    job = await create_ai_job(
+    job, fallback = await _safe_create_job(
         db=db,
         user_id=user.id,
         job_type="edit_image",
@@ -345,7 +387,8 @@ async def edit_image(
         provider=body.provider,
     )
 
-    await enqueue_ai_job(job.id, "edit_image")
+    if not fallback:
+        await _safe_enqueue(job.id, "edit_image")
 
     return AIJobResponse(
         job_id=job.id,

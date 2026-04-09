@@ -1,40 +1,20 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-interface AIJobResponse {
-	jobId: string;
-	job_id: string;
-	status: string;
-	progress: number;
-	output_url?: string | null;
-	output_data?: Record<string, unknown> | null;
-	error_message?: string | null;
-}
-
-/** Call the Next.js /api/ai/video route for all video/AI operations */
-async function callAIVideoAPI(
-	action: string,
-	params: Record<string, unknown>,
-): Promise<AIJobResponse> {
-	const response = await fetch("/api/ai/video", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ action, ...params }),
-	});
-	if (!response.ok) throw new Error(`API error ${response.status}`);
-	return response.json();
-}
-
-/** Poll a job via the Next.js /api/ai/jobs route */
-async function pollJobStatus(jobId: string): Promise<AIJobResponse> {
-	const response = await fetch(`/api/ai/jobs/${jobId}`);
-	if (!response.ok) throw new Error(`Job poll failed: ${response.status}`);
-	return response.json();
-}
+import {
+	generateTextToVideo,
+	generateImageToVideo,
+	generateScriptToScenes,
+	removeBackground,
+	upscaleImage,
+	styleTransfer,
+	getAIJobStatus,
+} from "@/lib/cloud-api";
+import type { AIJobResponse } from "@/lib/cloud-api";
 
 type AIMode =
 	| "text-to-video"
@@ -50,6 +30,12 @@ interface JobTracker {
 	status: string;
 	progress: number;
 	result: AIJobResponse | null;
+	request?: {
+		prompt?: string;
+		duration?: number;
+		aspectRatio?: string;
+		provider?: string;
+	};
 }
 
 export function AIGenerateView() {
@@ -69,7 +55,7 @@ export function AIGenerateView() {
 		async ({ jobId, index }: { jobId: string; index: number }) => {
 			const poll = async () => {
 				try {
-					const status = await pollJobStatus(jobId);
+					const status = await getAIJobStatus({ jobId });
 					setJobs((previous) =>
 						previous.map((job, idx) =>
 							idx === index
@@ -83,7 +69,11 @@ export function AIGenerateView() {
 						),
 					);
 
-					if (status.status !== "completed" && status.status !== "failed") {
+					if (
+						status.status !== "completed" &&
+						status.status !== "failed" &&
+						status.status !== "preview_ready"
+					) {
 						setTimeout(poll, 3000);
 					}
 				} catch {
@@ -102,30 +92,31 @@ export function AIGenerateView() {
 			let response: AIJobResponse;
 
 			if (mode === "text-to-video") {
-				response = await callAIVideoAPI("text-to-video", {
+				response = await generateTextToVideo({
 					prompt,
 					duration,
 					aspectRatio,
 					provider,
+					action: "preview",
 				});
 			} else if (mode === "image-to-video") {
-				response = await callAIVideoAPI("image-to-video", {
+				response = await generateImageToVideo({
 					imageUrl,
 					prompt,
 					duration,
 					provider,
 				});
 			} else if (mode === "script-to-scenes") {
-				response = await callAIVideoAPI("script-to-scenes", {
+				response = await generateScriptToScenes({
 					script,
 					aspectRatio,
 				});
 			} else if (mode === "bg-remove") {
-				response = await callAIVideoAPI("bg-remove", { imageUrl });
+				response = await removeBackground({ imageUrl });
 			} else if (mode === "upscale") {
-				response = await callAIVideoAPI("upscale", { imageUrl, scale });
+				response = await upscaleImage({ imageUrl, scale });
 			} else {
-				response = await callAIVideoAPI("style-transfer", {
+				response = await styleTransfer({
 					imageUrl,
 					stylePreset,
 				});
@@ -133,15 +124,19 @@ export function AIGenerateView() {
 
 			const newIndex = jobs.length;
 			const tracker: JobTracker = {
-				jobId: response.job_id ?? response.jobId,
+				jobId: response.job_id,
 				type: mode,
 				status: response.status,
 				progress: response.progress,
 				result: null,
+				request:
+					mode === "text-to-video"
+						? { prompt, duration, aspectRatio, provider }
+						: undefined,
 			};
 			setJobs((previous) => [...previous, tracker]);
 
-			pollJob({ jobId: response.job_id ?? response.jobId, index: newIndex });
+			pollJob({ jobId: response.job_id, index: newIndex });
 		} catch (error) {
 			console.error("Failed to start AI job:", error);
 		} finally {
@@ -160,6 +155,40 @@ export function AIGenerateView() {
 		jobs.length,
 		pollJob,
 	]);
+
+	const handleFinalize = useCallback(
+		async (job: JobTracker) => {
+			if (job.type !== "text-to-video" || !job.request) return;
+			setIsSubmitting(true);
+			try {
+				const response = await generateTextToVideo({
+					prompt: job.request.prompt ?? prompt,
+					duration: job.request.duration ?? duration,
+					aspectRatio: job.request.aspectRatio ?? aspectRatio,
+					provider: job.request.provider ?? provider,
+					action: "finalize",
+					sourceJobId: job.jobId,
+					projectId: undefined,
+				});
+
+				const newIndex = jobs.length;
+				const tracker: JobTracker = {
+					jobId: response.job_id,
+					type: "text-to-video finalize",
+					status: response.status,
+					progress: response.progress,
+					result: null,
+				};
+				setJobs((previous) => [...previous, tracker]);
+				pollJob({ jobId: response.job_id, index: newIndex });
+			} catch (error) {
+				console.error("Failed to finalize AI video:", error);
+			} finally {
+				setIsSubmitting(false);
+			}
+		},
+		[aspectRatio, duration, jobs.length, pollJob, prompt, provider],
+	);
 
 	const modes: Array<{ value: AIMode; label: string }> = [
 		{ value: "text-to-video", label: "Text → Video" },
@@ -374,9 +403,11 @@ export function AIGenerateView() {
 										className={
 											job.status === "completed"
 												? "text-green-500"
-												: job.status === "failed"
-													? "text-red-500"
-													: "text-muted-foreground"
+												: job.status === "preview_ready"
+													? "text-blue-500"
+													: job.status === "failed"
+														? "text-red-500"
+														: "text-muted-foreground"
 										}
 									>
 										{job.status}
@@ -393,6 +424,95 @@ export function AIGenerateView() {
 								{job.result?.output_data && (
 									<div className="text-muted-foreground mt-1 truncate">
 										{JSON.stringify(job.result.output_data).slice(0, 100)}
+									</div>
+								)}
+								{job.status === "completed" &&
+									job.result?.output_data &&
+									typeof (
+										job.result.output_data as {
+											final_video_url?: string | null;
+										}
+									).final_video_url === "string" &&
+									(
+										job.result.output_data as {
+											final_video_url?: string | null;
+										}
+									).final_video_url && (
+										<a
+											href={
+												(
+													job.result.output_data as {
+														final_video_url?: string | null;
+													}
+												).final_video_url ?? "#"
+											}
+											target="_blank"
+											rel="noreferrer"
+											className="text-primary mt-1 block truncate text-[10px] underline"
+										>
+											Open final video
+										</a>
+									)}
+								{job.status === "preview_ready" && job.result?.output_data && (
+									<div className="mt-2 space-y-2">
+										<div className="grid grid-cols-3 gap-1">
+											{Array.isArray(
+												(
+													job.result.output_data as {
+														preview_frames?: Array<{
+															id: string;
+															provider?: string;
+															image_url?: string | null;
+															output_url?: string | null;
+														}>;
+													}
+												).preview_frames,
+											) &&
+												(
+													(
+														job.result.output_data as {
+															preview_frames?: Array<{
+																id: string;
+																provider?: string;
+																image_url?: string | null;
+																output_url?: string | null;
+															}>;
+														}
+													).preview_frames ?? []
+												).map((frame) => (
+													<div
+														key={frame.id}
+														className="bg-background overflow-hidden rounded border"
+													>
+														{(frame.image_url || frame.output_url) && (
+															<Image
+																src={frame.image_url ?? frame.output_url ?? ""}
+																alt={frame.id}
+																width={320}
+																height={180}
+																className="h-20 w-full object-cover"
+															/>
+														)}
+														<div className="space-y-0.5 p-1">
+															<div className="text-[10px] text-muted-foreground">
+																{frame.id}
+															</div>
+															<div className="truncate text-[10px]">
+																{frame.provider}
+															</div>
+														</div>
+													</div>
+												))}
+										</div>
+										<Button
+											type="button"
+											size="sm"
+											className="h-7 w-full"
+											onClick={() => handleFinalize(job)}
+											disabled={isSubmitting}
+										>
+											Finalize Video
+										</Button>
 									</div>
 								)}
 							</div>

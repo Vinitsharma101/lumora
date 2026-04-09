@@ -64,9 +64,7 @@ export function MovieCreationWizard() {
 						>
 							{s.title}
 						</span>
-						{i < steps.length - 1 && (
-							<div className="w-8 h-px bg-zinc-700" />
-						)}
+						{i < steps.length - 1 && <div className="w-8 h-px bg-zinc-700" />}
 					</div>
 				))}
 			</div>
@@ -78,8 +76,8 @@ export function MovieCreationWizard() {
 						Describe Your Movie
 					</h2>
 					<p className="text-sm text-zinc-400">
-						Tell us about your movie concept. Be as detailed as
-						possible about the story, characters, and setting.
+						Tell us about your movie concept. Be as detailed as possible about
+						the story, characters, and setting.
 					</p>
 					<textarea
 						value={query}
@@ -92,9 +90,7 @@ export function MovieCreationWizard() {
 
 			{step === 1 && (
 				<div className="flex flex-col gap-6">
-					<h2 className="text-xl font-semibold text-white">
-						Movie Settings
-					</h2>
+					<h2 className="text-xl font-semibold text-white">Movie Settings</h2>
 
 					<div className="flex flex-col gap-2">
 						<label className="text-sm font-medium text-zinc-300">
@@ -144,46 +140,31 @@ export function MovieCreationWizard() {
 
 			{step === 2 && (
 				<div className="flex flex-col gap-4">
-					<h2 className="text-xl font-semibold text-white">
-						Review & Create
-					</h2>
+					<h2 className="text-xl font-semibold text-white">Review & Create</h2>
 
 					<div className="p-4 bg-zinc-900 border border-zinc-700 rounded-lg">
 						<div className="flex flex-col gap-3">
 							<div>
-								<span className="text-sm text-zinc-400">
-									Concept:
-								</span>
-								<p className="text-sm text-white mt-1">
-									{query}
-								</p>
+								<span className="text-sm text-zinc-400">Concept:</span>
+								<p className="text-sm text-white mt-1">{query}</p>
 							</div>
 							<div className="flex gap-4">
 								<div>
-									<span className="text-sm text-zinc-400">
-										Duration:
-									</span>
-									<p className="text-sm text-white">
-										{duration} min
-									</p>
+									<span className="text-sm text-zinc-400">Duration:</span>
+									<p className="text-sm text-white">{duration} min</p>
 								</div>
 								<div>
-									<span className="text-sm text-zinc-400">
-										Style:
-									</span>
-									<p className="text-sm text-white capitalize">
-										{style}
-									</p>
+									<span className="text-sm text-zinc-400">Style:</span>
+									<p className="text-sm text-white capitalize">{style}</p>
 								</div>
 							</div>
 						</div>
 					</div>
 
 					<p className="text-xs text-zinc-500">
-						The AI will create a story structure, generate visual
-						assets, compose music, and assemble your movie
-						autonomously. This may take 30-60 minutes depending on
-						duration.
+						The AI will create a story structure, generate visual assets,
+						compose music, and assemble your movie autonomously. This may take
+						30-60 minutes depending on duration.
 					</p>
 				</div>
 			)}
@@ -215,12 +196,22 @@ export function MovieCreationWizard() {
 						disabled={status === "processing"}
 						className="px-6 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-500 disabled:opacity-30"
 					>
-						{status === "processing"
-							? "Creating..."
-							: "Create Movie"}
+						{status === "processing" ? "Creating..." : "Create Movie"}
 					</button>
 				)}
 			</div>
+
+			{status === "processing" && (
+				<div className="flex min-h-[120px] items-center justify-center">
+					<div className="flex items-center gap-2 text-zinc-400">
+						<span className="animate-bounce [animation-delay:-0.3s]">.</span>
+						<span className="animate-bounce [animation-delay:-0.15s]">.</span>
+						<span className="animate-bounce">.</span>
+						<span className="animate-bounce [animation-delay:0.15s]">.</span>
+						<span className="animate-bounce [animation-delay:0.3s]">.</span>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

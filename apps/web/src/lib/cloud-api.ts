@@ -315,12 +315,16 @@ export async function generateTextToVideo({
 	duration,
 	aspectRatio,
 	provider,
+	action,
+	sourceJobId,
 	projectId,
 }: {
 	prompt: string;
 	duration?: number;
 	aspectRatio?: string;
 	provider?: string;
+	action?: "preview" | "finalize";
+	sourceJobId?: string;
 	projectId?: string;
 }): Promise<AIJobResponse> {
 	const response = await apiFetch("/api/ai/video/text-to-video", {
@@ -331,6 +335,8 @@ export async function generateTextToVideo({
 			duration,
 			aspect_ratio: aspectRatio,
 			provider,
+			action,
+			source_job_id: sourceJobId,
 			project_id: projectId,
 		}),
 	});

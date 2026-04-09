@@ -16,8 +16,12 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.orchestrator import AgentOrchestrator
+from app.auth import _get_or_create_dev_user
+from app.config import settings
+from app.database import get_db
 from app.services.character_service import CharacterService
 from app.services.cost_estimator import estimate_pipeline_cost
 from app.auth import get_current_user_optional
@@ -63,9 +67,14 @@ async def execute_agent(
     project_id: str,
     request: AgentExecuteRequest,
     user=Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
 ):
     """Start the autonomous agentic video creation pipeline."""
-    user_id = user.id if user else "anonymous"
+    if user:
+        user_id = user.id
+    else:
+        dev_user = await _get_or_create_dev_user(db)
+        user_id = dev_user.id
 
     orchestrator = AgentOrchestrator(
         project_id=project_id,

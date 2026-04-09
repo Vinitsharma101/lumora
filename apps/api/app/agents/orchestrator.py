@@ -138,11 +138,21 @@ class AgentOrchestrator:
             raise
 
         # Enqueue the top-level job via ARQ
-        pool = await get_arq_pool()
-        if context.get("raw_video_url"):
-            await pool.enqueue_job("process_movie_ingestion", self.session_id)
-        else:
-            await pool.enqueue_job("process_movie_director", self.session_id)
+        try:
+            pool = await get_arq_pool()
+            if context.get("raw_video_url"):
+                await pool.enqueue_job("process_movie_ingestion", self.session_id)
+            else:
+                await pool.enqueue_job("process_movie_director", self.session_id)
+        except Exception as e:
+            logger.error(f"Failed to enqueue agent session {self.session_id}: {e}", exc_info=True)
+            self.state["status"] = "failed"
+            self.state["error"] = f"Failed to enqueue pipeline job: {e}"
+            try:
+                await self.save_state()
+            except Exception:
+                pass
+            raise RuntimeError(f"Failed to enqueue pipeline job: {e}")
 
         return self.session_id
 

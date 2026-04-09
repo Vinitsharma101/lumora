@@ -6,7 +6,11 @@ All AI processing uses cloud APIs — no local models.
 Run with: arq app.worker.WorkerSettings
 """
 
+import asyncio
 import logging
+import os
+import shutil
+import tempfile
 from urllib.parse import urlparse
 
 from arq import create_pool
@@ -17,6 +21,161 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 _arq_pool = None
+
+
+def _build_preview_frame_prompt(base_prompt: str, frame_index: int, frame_count: int, previous_prompt: str | None) -> str:
+    prompt = (
+        f"Create preview frame {frame_index + 1} of {frame_count} for this video. "
+        f"Keep the same subject, style, lighting, composition, and scene continuity. "
+        f"Base prompt: {base_prompt}"
+    )
+    if previous_prompt:
+        prompt += f" Previous frame context: {previous_prompt}"
+    return prompt
+
+
+def _ensure_ffmpeg_available() -> None:
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("FFmpeg is not installed or not available on PATH")
+
+
+async def _retry_frame_generation(factory, attempts: int = 3):
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return await factory()
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Frame generation failed on attempt %s/%s: %s", attempt, attempts, exc)
+            if attempt < attempts:
+                await asyncio.sleep(1.5 * attempt)
+    raise RuntimeError(f"Frame generation failed after {attempts} attempts: {last_error}")
+
+
+async def _generate_preview_frames(
+    *,
+    prompt: str,
+    duration: int,
+    provider_name: str,
+) -> list[dict]:
+    from app.services.ai_video.google_provider import GoogleAIProvider
+    from app.services.ai_video.replicate_provider import ReplicateProvider
+
+    frame_count = max(1, min(duration, 60))
+    frames: list[dict] = []
+    previous_prompt: str | None = None
+    logger.info("Generating %s preview frames via %s", frame_count, provider_name)
+
+    for index in range(frame_count):
+        frame_prompt = _build_preview_frame_prompt(prompt, index, frame_count, previous_prompt)
+
+        if provider_name == "google_veo":
+            provider = GoogleAIProvider()
+            result = await _retry_frame_generation(lambda: provider.generate_image(prompt=frame_prompt, aspect_ratio="16:9", count=1))
+            predictions = result.get("predictions", [])
+            image_url = None
+            if predictions:
+                first = predictions[0]
+                image_url = first.get("imageUrl") or first.get("url") or first.get("bytesBase64Encoded")
+            frames.append({
+                "id": f"frame-{index + 1:03d}",
+                "index": index + 1,
+                "prompt": frame_prompt,
+                "provider": "google_imagen",
+                "image_url": image_url,
+                "status": "completed",
+                "output": [image_url] if image_url else [],
+                "error": None,
+            })
+            logger.info("Generated preview frame %s/%s from Google", index + 1, frame_count)
+        else:
+            provider = ReplicateProvider()
+            result = await _retry_frame_generation(lambda: provider.text_to_image(prompt=frame_prompt, width=1024, height=1024, model="schnell", wait=True))
+            frames.append({
+                "id": f"frame-{index + 1:03d}",
+                "index": index + 1,
+                "prompt": frame_prompt,
+                "provider": result.get("provider", "replicate"),
+                "prediction_id": result.get("prediction_id"),
+                "output_url": result.get("output_url"),
+                "output": result.get("output"),
+                "status": result.get("status", "completed"),
+                "error": None,
+            })
+            logger.info("Generated preview frame %s/%s from Replicate", index + 1, frame_count)
+
+        previous_prompt = frame_prompt
+
+    return frames
+
+
+async def _frames_to_video(frame_urls: list[str], fps: int = 24) -> str:
+    if not frame_urls:
+        raise ValueError("No preview frames available")
+
+    _ensure_ffmpeg_available()
+
+    import httpx
+    from app.services.storage_service import upload_bytes
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        local_frames: list[str] = []
+        async with httpx.AsyncClient(follow_redirects=True, timeout=120) as client:
+            for index, frame_url in enumerate(frame_urls, start=1):
+                if not frame_url:
+                    continue
+                response = await client.get(frame_url)
+                response.raise_for_status()
+                frame_path = os.path.join(tmpdir, f"frame-{index:03d}.png")
+                with open(frame_path, "wb") as f:
+                    f.write(response.content)
+                local_frames.append(frame_path)
+
+            if not local_frames:
+                raise ValueError("Unable to download preview frames")
+
+        concat_path = os.path.join(tmpdir, "frames.txt")
+        with open(concat_path, "w", encoding="utf-8") as f:
+            for frame_path in local_frames:
+                normalized = frame_path.replace("\\", "/")
+                f.write(f"file '{normalized}'\n")
+                f.write(f"duration {1 / fps:.6f}\n")
+            last_normalized = local_frames[-1].replace("\\", "/")
+            f.write(f"file '{last_normalized}'\n")
+
+        output_path = os.path.join(tmpdir, "final-preview.mp4")
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            concat_path,
+            "-vf",
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-r",
+            str(fps),
+            "-pix_fmt",
+            "yuv420p",
+            output_path,
+        ]
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            raise RuntimeError((stderr or stdout).decode("utf-8", errors="ignore") or "ffmpeg failed")
+
+        with open(output_path, "rb") as f:
+            video_bytes = f.read()
+
+        logger.info("Generated final video from %s preview frames", len(local_frames))
+        return await upload_bytes(video_bytes, "mp4", "video/mp4", prefix="ai_preview_video")
 
 
 def _parse_redis_url(redis_url: str) -> RedisSettings:
@@ -146,47 +305,90 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 )
 
             elif job_type == "text_to_video":
-                from app.services.ai_video.sora_provider import SoraProvider
-                from app.services.ai_video.google_provider import GoogleAIProvider
-                from app.services.ai_video.replicate_provider import ReplicateProvider
-
                 provider_name = input_data.get("provider", "replicate")
-                if provider_name == "google_veo":
-                    ai_service = GoogleAIProvider()
-                    ai_result = await ai_service.generate_video_from_text(
-                        prompt=input_data["prompt"],
-                        duration=input_data.get("duration", 4),
-                        aspect_ratio=input_data.get("aspect_ratio", "16:9"),
+                prompt = input_data["prompt"]
+                duration = input_data.get("duration", 4)
+                action = input_data.get("action", "preview")
+                logger.info("AI job %s started: text_to_video action=%s provider=%s", job_id, action, provider_name)
+
+                if action == "finalize":
+                    output_data = job.output_data or {}
+                    source_job_id = input_data.get("source_job_id")
+                    if source_job_id and source_job_id != job_id:
+                        from sqlalchemy import select
+                        from app.models import AIJob
+
+                        source_stmt = select(AIJob).where(AIJob.id == source_job_id)
+                        source_result = await db.execute(source_stmt)
+                        source_job = source_result.scalar_one_or_none()
+                        if not source_job or not source_job.output_data:
+                            raise RuntimeError("Source preview job not found or missing output")
+                        output_data = source_job.output_data
+
+                    preview_frames = output_data.get("preview_frames", [])
+                    if not preview_frames:
+                        raise RuntimeError("No stored preview frames available for finalize")
+
+                    frame_urls = []
+                    for frame in sorted(preview_frames, key=lambda item: item.get("index", 0)):
+                        frame_url = frame.get("image_url") or frame.get("output_url")
+                        if frame_url:
+                            frame_urls.append(frame_url)
+
+                    if not frame_urls:
+                        raise RuntimeError("Stored preview frames are missing URLs")
+
+                    await update_job_status(db, job_id, "processing", 0.5, output_data=output_data)
+                    final_video_url = await _frames_to_video(frame_urls, fps=24)
+                    logger.info("AI job %s finalized video url=%s", job_id, final_video_url)
+                    completed_output = {
+                        **output_data,
+                        "final_video_url": final_video_url,
+                        "output": frame_urls,
+                    }
+                    await update_job_status(
+                        db,
+                        job_id,
+                        "completed",
+                        1.0,
+                        output_data=completed_output,
                     )
-                elif provider_name == "openai_sora":
-                    ai_service = SoraProvider()
-                    ai_result = await ai_service.generate_video(
-                        prompt=input_data["prompt"],
-                        duration=input_data.get("duration", 5),
-                        aspect_ratio=input_data.get("aspect_ratio", "16:9"),
-                    )
-                elif provider_name == "luma":
-                    from app.services.ai_video.replicate_provider import ReplicateProvider
-                    provider = ReplicateProvider()
-                    ai_result = await provider.text_to_video_luma(
-                        prompt=input_data["prompt"],
-                        aspect_ratio=input_data.get("aspect_ratio", "16:9"),
-                    )
-                elif provider_name == "replicate":
-                    from app.services.ai_video.replicate_provider import ReplicateProvider
-                    provider = ReplicateProvider()
-                    ai_result = await provider.text_to_video(
-                        prompt=input_data["prompt"],
-                        duration=input_data.get("duration", 4),
-                    )
-                else:
-                    raise ValueError(f"Unknown provider: {provider_name}")
+                    return {
+                        "status": "completed",
+                        "output": frame_urls,
+                        "error": None,
+                        "final_video_url": final_video_url,
+                        "preview_frames": preview_frames,
+                    }
+
+                preview_frames = await _generate_preview_frames(
+                    prompt=prompt,
+                    duration=duration,
+                    provider_name=provider_name,
+                )
+                logger.info("AI job %s preview generated with %s frames", job_id, len(preview_frames))
 
                 await update_job_status(
-                    db, job_id, "processing", 0.5,
-                    output_data=ai_result,
-                    provider_job_id=ai_result.get("prediction_id") or ai_result.get("operation_name") or ai_result.get("generation_id"),
+                    db,
+                    job_id,
+                    "preview_ready",
+                    1.0,
+                    output_data={
+                        "preview_frames": preview_frames,
+                        "frame_count": len(preview_frames),
+                        "provider": provider_name,
+                        "duration": duration,
+                        "output": preview_frames,
+                    },
                 )
+
+                return {
+                    "status": "preview_ready",
+                    "output": preview_frames,
+                    "error": None,
+                    "frame_count": len(preview_frames),
+                    "final_video_url": None,
+                }
 
             elif job_type == "image_to_video":
                 provider_name = input_data.get("provider", "google_veo")
@@ -221,6 +423,8 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
 
             elif job_type == "background_remove":
                 url = input_data.get("image_url") or input_data.get("video_url")
+                if not isinstance(url, str):
+                    raise ValueError("background_remove requires image_url or video_url")
                 from app.services.ai_video.replicate_provider import ReplicateProvider
                 provider = ReplicateProvider()
                 ai_result = await provider.remove_background(url)
@@ -232,6 +436,8 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
 
             elif job_type == "upscale":
                 url = input_data.get("image_url") or input_data.get("video_url")
+                if not isinstance(url, str):
+                    raise ValueError("upscale requires image_url or video_url")
                 from app.services.ai_video.replicate_provider import ReplicateProvider
                 provider = ReplicateProvider()
                 ai_result = await provider.upscale_image(url, input_data.get("scale", 2))
@@ -450,6 +656,10 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 if provider_name == "openai":
                     from app.services.ai_video.openai_image_provider import OpenAIImageProvider
                     oai = OpenAIImageProvider()
+                    openai_negative_prompt = negative_prompt or (
+                        "random scene, extra people, extra animals, text, watermark, blurry,"
+                        " low quality, distorted, unrelated objects"
+                    )
 
                     # If style references provided, use edit endpoint
                     if style_reference_urls:
@@ -476,6 +686,8 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                         img_bytes = b64mod.b64decode(b64_img)
                         url = await upload_bytes(img_bytes, "png", "image/png", prefix="ai_image")
                         image_urls.append(url)
+                    if not image_urls:
+                        raise RuntimeError("OpenAI image generation returned no images")
                     await update_job_status(
                         db, job_id, "completed", 1.0,
                         output_data={"image_urls": image_urls, "provider": "openai"},
@@ -495,12 +707,14 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                     from app.services.storage_service import upload_bytes
                     import base64 as b64mod
                     image_urls = []
-                    predictions = ai_result.get("predictions", [])
+                    predictions = ai_result.get("predictions") or ai_result.get("raw_response", {}).get("predictions", [])
                     for pred in predictions:
                         if "bytesBase64Encoded" in pred:
                             img_bytes = b64mod.b64decode(pred["bytesBase64Encoded"])
                             url = await upload_bytes(img_bytes, "png", "image/png", prefix="ai_image")
                             image_urls.append(url)
+                    if not image_urls:
+                        raise RuntimeError("Google Imagen returned no image bytes")
                     await update_job_status(
                         db, job_id, "completed", 1.0,
                         output_data={"image_urls": image_urls, "provider": "google_imagen"},
@@ -510,11 +724,12 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                 else:
                     from app.services.ai_video.replicate_provider import ReplicateProvider
                     provider = ReplicateProvider()
+                    replicate_model = input_data.get("model", "dev")
                     ai_result = await provider.text_to_image(
                         prompt=enhanced_prompt,
                         width=input_data.get("width", 1024),
                         height=input_data.get("height", 1024),
-                        model=input_data.get("model", "schnell"),
+                        model=replicate_model,
                         negative_prompt=negative_prompt,
                         seed=seed,
                     )

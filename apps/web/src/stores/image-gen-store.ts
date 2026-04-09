@@ -48,7 +48,7 @@ interface ImageGenState {
 	selectedImageId: string | null;
 	activeProvider: ImageProvider;
 	aspectRatio: AspectRatio;
-	numImages: 1 | 2 | 3 | 4;
+	numImages: 1 | 2 | 3 | 4 | 5;
 	isExpanded: boolean;
 	promptHistory: string[];
 	styleReferenceImages: StyleReferenceImage[];
@@ -66,7 +66,7 @@ interface ImageGenActions {
 	selectImage: (id: string | null) => void;
 	setProvider: (provider: ImageProvider) => void;
 	setAspectRatio: (ratio: AspectRatio) => void;
-	setNumImages: (count: 1 | 2 | 3 | 4) => void;
+	setNumImages: (count: 1 | 2 | 3 | 4 | 5) => void;
 	setExpanded: (expanded: boolean) => void;
 	addPromptToHistory: (prompt: string) => void;
 	addStyleReference: (ref: StyleReferenceImage) => void;

@@ -74,7 +74,13 @@ export class ProjectManager {
 		await this.storageMigrationPromise;
 	}
 
-	async createNewProject({ name, type = "video" }: { name: string; type?: "image" | "video" }): Promise<string> {
+	async createNewProject({
+		name,
+		type = "video",
+	}: {
+		name: string;
+		type?: "image" | "video";
+	}): Promise<string> {
 		const mainScene = buildDefaultScene({ name: "Main scene", isMain: true });
 		const newProject: TProject = {
 			metadata: {
@@ -459,6 +465,25 @@ export class ProjectManager {
 		this.editor.save.markDirty();
 	}
 
+	async updateProjectType({
+		type,
+	}: {
+		type: "image" | "video";
+	}): Promise<void> {
+		if (!this.active) return;
+
+		const updatedProject: TProject = {
+			...this.active,
+			metadata: { ...this.active.metadata, type, updatedAt: new Date() },
+		};
+		this.active = updatedProject;
+		this.notify();
+		await storageService.saveProject({ project: updatedProject });
+		cloudSyncService.saveProject({ project: updatedProject });
+		this.updateMetadata(updatedProject);
+		this.editor.save.markDirty();
+	}
+
 	async prepareExit(): Promise<void> {
 		if (!this.active) return;
 
@@ -630,6 +655,8 @@ export class ProjectManager {
 	}
 
 	private notify(): void {
-		this.listeners.forEach((fn) => { fn(); });
+		this.listeners.forEach((fn) => {
+			fn();
+		});
 	}
 }

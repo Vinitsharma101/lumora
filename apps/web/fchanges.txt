@@ -1,0 +1,112 @@
+Frontend Image Flow Notes
+
+What I checked
+- I looked at the frontend image generation path.
+- The main UI is in `src/components/editor/panels/assets/views/ai-image/`.
+- The polling and state live in `src/hooks/use-image-gen-polling.ts` and `src/stores/image-gen-store.ts`.
+- The frontend still has mock routes under `src/app/api/ai/`.
+
+Why the random image issue can happen on the frontend
+- The old frontend route could fall back to `picsum.photos` when no real backend token was available.
+- That means the UI could still show an image even when it was not generated from the prompt.
+- So the result looked "random" even though the request path seemed successful.
+
+What the UI currently does
+- The controls panel takes the prompt, provider, aspect ratio, and style options.
+- It saves the request into local image state.
+- The gallery shows generated items and the polling hook updates completed jobs.
+
+What to watch for next
+- Make sure the frontend calls the real backend path instead of a mock image route.
+- Make sure edit mode sends the source image URL in a real field, not only inside the prompt text.
+- Make sure polling reads the same job ID format that the backend returns.
+
+Simple summary
+- The frontend can create the illusion of a working image request even when it is only showing a placeholder.
+- The next frontend step should be to replace mock behavior with a real backend request flow.
+
+Files to change next
+- `src/components/editor/panels/assets/views/ai-image/controls-panel.tsx`
+- `src/app/api/ai/generate-image/route.ts`
+- `src/app/api/ai/video/route.ts`
+- `src/app/api/ai/jobs/[jobId]/route.ts`
+- `src/hooks/use-image-gen-polling.ts`
+- `src/stores/image-gen-store.ts`
+
+Major change in each file
+- `controls-panel.tsx`
+  - Make the prompt submit flow send the exact text the user wrote.
+  - Make edit mode pass the real source image URL in a clear field.
+  - Keep style, seed, aspect ratio, and negative prompt values in the same request.
+- `src/app/api/ai/generate-image/route.ts`
+  - Remove mock image fallback behavior.
+  - Send image requests to the real backend instead of generating placeholder images.
+- `src/app/api/ai/video/route.ts`
+  - Stop returning fake video/image job data.
+  - Forward the request to the actual backend route.
+- `src/app/api/ai/jobs/[jobId]/route.ts`
+  - Stop reading job status from mock/Replicate-only logic.
+  - Pull job progress from the real backend job endpoint.
+- `use-image-gen-polling.ts`
+  - Keep polling aligned with the real job status shape.
+  - Update completed/failed image cards only from real backend output.
+- `image-gen-store.ts`
+  - Keep the UI state shape stable.
+  - Only adjust it if the backend response format needs a small mapping fix.
+
+Why these files matter
+- These are the places where the UI can accidentally pretend everything worked.
+- If any of them use mock data or outdated job shapes, the screen can show a believable image even when the prompt was not sent correctly.
+- Cleaning these files should make the frontend tell the truth about what the backend actually returned.
+
+Best order to work in
+- First fix the request sender in `controls-panel.tsx`.
+- Then replace mock routes in `src/app/api/ai/`.
+- Then make polling/stores match the real backend response.
+- Finally test the full prompt → job → poll → display flow.
+
+Step 1 started
+- I began with `src/components/editor/panels/assets/views/ai-image/controls-panel.tsx`.
+- The goal is to make sure the prompt and the source image URL are sent separately and clearly.
+- This is important because edit mode should not hide the source image inside the prompt text.
+- The cleaner the request, the easier it is to tell whether a bad result is caused by the frontend or by the backend/provider.
+
+Step 2 started
+- I moved to the frontend API routes that were returning mock or placeholder image data.
+- `src/app/api/ai/generate-image/route.ts` now forwards image requests to the real backend instead of creating fake picsum images.
+- `src/app/api/ai/jobs/[jobId]/route.ts` now asks the real backend for job status instead of reading only the old Replicate-only mock flow.
+- This is important because mock routes can make the UI look like it worked even when the prompt was not really sent to the backend.
+
+Step 2 done
+- The image request path now goes to the real backend.
+- The job polling path also goes to the real backend.
+- That means the frontend is no longer inventing image results by itself.
+- Now the UI should only display what the backend actually returns.
+
+What still remains in the frontend flow
+- The workspace still needs a final review to make sure the gallery and polling state match the backend response exactly.
+- The UI labels and preview elements can be cleaned later, but they are not the main cause of the random-image problem.
+- The biggest problem was the mock fallback flow, and that part is now removed from the main image path.
+
+Final frontend cleanup
+- I cleaned the image editor panel so the request is easier to understand.
+- The source image is passed separately in edit mode.
+- The labels now behave better for accessibility and linting.
+- The preview image uses the optimized image component instead of a raw `<img>` tag.
+- I also ran a focused frontend check on the changed files, and the cleaned files passed.
+
+Final connectivity fix
+- The image generator now talks to the real backend directly from the browser through the shared API client.
+- The polling hook also reads job status from the real backend directly.
+- This removes one more layer that could hide the real error.
+- I re-ran the frontend production build after this change, and it completed successfully.
+
+Browser error fix
+- The backend returns `job_id`, but the UI was expecting `jobId` in a few places.
+- I normalized that shape so the browser can keep polling the right job.
+- This matters because a missing job ID can make the UI think the API failed even when it actually returned a queued job.
+
+Why this step matters
+- If the frontend makes fake jobs or fake images, it becomes impossible to know whether the random output is from the UI or the model.
+- Real forwarding makes debugging honest.
+- It also helps the polling and gallery show the same data that the backend actually produced.

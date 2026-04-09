@@ -12,16 +12,13 @@ export async function GET(
 ) {
 	const { jobId } = await params;
 
-	// Mock jobs complete instantly
 	if (jobId.startsWith("mock-")) {
 		return NextResponse.json({
 			id: jobId,
 			status: "completed",
 			progress: 1,
 			output_data: {
-				output: [
-					`https://picsum.photos/seed/${jobId.slice(5, 13)}/1024/768`,
-				],
+				output: [`https://picsum.photos/seed/${jobId.slice(5, 13)}/1024/768`],
 			},
 		});
 	}
@@ -52,7 +49,6 @@ export async function GET(
 
 		const prediction = await response.json();
 
-		// Map Replicate status to our format
 		if (prediction.status === "succeeded") {
 			const urls = Array.isArray(prediction.output)
 				? prediction.output
@@ -72,12 +68,10 @@ export async function GET(
 			return NextResponse.json({
 				id: prediction.id,
 				status: "failed",
-				error_message:
-					prediction.error ?? "Generation failed",
+				error_message: prediction.error ?? "Generation failed",
 			});
 		}
 
-		// Still processing
 		const logs = prediction.logs ?? "";
 		const progressMatch = logs.match(/(\d+)%/);
 		const progress = progressMatch
@@ -90,9 +84,6 @@ export async function GET(
 			progress,
 		});
 	} catch {
-		return NextResponse.json(
-			{ error: "API unavailable" },
-			{ status: 503 },
-		);
+		return NextResponse.json({ error: "API unavailable" }, { status: 503 });
 	}
 }

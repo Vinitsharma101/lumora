@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { apiFetch } from "@/lib/api-client";
 import { useImageGenStore } from "@/stores/image-gen-store";
 
 const POLL_INTERVAL = 2000;
@@ -10,7 +11,7 @@ async function fetchJobStatus(jobId: string): Promise<{
 	output_url?: string;
 	error_message?: string;
 }> {
-	const response = await fetch(`/api/ai/jobs/${jobId}`);
+	const response = await apiFetch(`/api/ai/jobs/${jobId}`);
 	if (!response.ok) {
 		throw new Error(`Job poll failed: ${response.status}`);
 	}

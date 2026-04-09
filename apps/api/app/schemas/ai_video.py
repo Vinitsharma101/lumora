@@ -18,7 +18,9 @@ class TextToVideoRequest(BaseModel):
     duration: int = 4  # seconds
     aspect_ratio: Literal["16:9", "9:16", "1:1"] = "16:9"
     style: str | None = None
-    provider: Literal["google_veo", "replicate", "openai_sora"] = "google_veo"
+    provider: Literal["google_veo", "replicate", "openai_sora", "luma"] = "google_veo"
+    action: Literal["preview", "finalize"] = "preview"
+    source_job_id: str | None = None
     project_id: str | None = None
 
 
@@ -26,7 +28,7 @@ class ImageToVideoRequest(BaseModel):
     image_url: str
     prompt: str | None = None
     duration: int = 4
-    provider: Literal["google_veo", "replicate"] = "google_veo"
+    provider: Literal["google_veo", "replicate", "luma"] = "google_veo"
     project_id: str | None = None
 
 
@@ -34,7 +36,7 @@ class ScriptToScenesRequest(BaseModel):
     script: str
     style: str | None = None
     aspect_ratio: Literal["16:9", "9:16", "1:1"] = "16:9"
-    provider: Literal["google_veo", "replicate", "openai_sora"] = "google_veo"
+    provider: Literal["google_veo", "replicate", "openai_sora", "luma"] = "google_veo"
     project_id: str | None = None
 
 

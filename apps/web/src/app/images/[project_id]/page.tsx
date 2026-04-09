@@ -116,15 +116,16 @@ export default function ImageEditorPage() {
 }
 
 function ImageEditorShell({ projectId }: { projectId: string }) {
+	const editor = useEditor();
 	const [chatOpen, setChatOpen] = useState(true);
 	const [canvasItems, setCanvasItems] = useState<CanvasItem[]>([]);
 	const [zoom, setZoom] = useState(1);
 	const [activeTool, setActiveTool] = useState<ToolId>("cursor");
 	const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 	const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
-	const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>(
-		[],
-	);
+	const [pendingAttachments, setPendingAttachments] = useState<
+		ChatAttachment[]
+	>([]);
 	const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Persist canvas items to localStorage keyed by projectId
@@ -144,6 +145,12 @@ function ImageEditorShell({ projectId }: { projectId: string }) {
 			// Corrupted data — ignore
 		}
 	}, [storageKey]);
+
+	useEffect(() => {
+		const activeProject = editor.project.getActiveOrNull();
+		if (!activeProject || activeProject.metadata.type === "image") return;
+		void editor.project.updateProjectType({ type: "image" });
+	}, [editor.project]);
 
 	// Debounced save whenever canvas items change
 	useEffect(() => {
@@ -180,34 +187,28 @@ function ImageEditorShell({ projectId }: { projectId: string }) {
 		setZoom((prev) => Math.max(0.1, +(prev - 0.1).toFixed(1)));
 	}, []);
 
-	const handleDuplicate = useCallback(
-		(itemIds: string[]) => {
-			setCanvasItems((prev) => {
-				const duplicates: CanvasItem[] = [];
-				for (const id of itemIds) {
-					const item = prev.find((i) => i.id === id);
-					if (item) {
-						duplicates.push({
-							...item,
-							id: crypto.randomUUID(),
-							x: item.x + 30,
-							y: item.y + 30,
-						});
-					}
+	const handleDuplicate = useCallback((itemIds: string[]) => {
+		setCanvasItems((prev) => {
+			const duplicates: CanvasItem[] = [];
+			for (const id of itemIds) {
+				const item = prev.find((i) => i.id === id);
+				if (item) {
+					duplicates.push({
+						...item,
+						id: crypto.randomUUID(),
+						x: item.x + 30,
+						y: item.y + 30,
+					});
 				}
-				return [...prev, ...duplicates];
-			});
-		},
-		[],
-	);
+			}
+			return [...prev, ...duplicates];
+		});
+	}, []);
 
-	const handleDelete = useCallback(
-		(itemIds: string[]) => {
-			setCanvasItems((prev) => prev.filter((i) => !itemIds.includes(i.id)));
-			setSelectedItemIds([]);
-		},
-		[],
-	);
+	const handleDelete = useCallback((itemIds: string[]) => {
+		setCanvasItems((prev) => prev.filter((i) => !itemIds.includes(i.id)));
+		setSelectedItemIds([]);
+	}, []);
 
 	const handleBringToFront = useCallback((itemIds: string[]) => {
 		setCanvasItems((prev) => {
@@ -368,7 +369,10 @@ function ImageEditorHeader() {
 						type="button"
 						className="flex items-center justify-center size-8 rounded-full hover:bg-black/5 transition-colors"
 					>
-						<HugeiconsIcon icon={ArrowLeft02Icon} className="size-4 text-black/80" />
+						<HugeiconsIcon
+							icon={ArrowLeft02Icon}
+							className="size-4 text-black/80"
+						/>
 					</button>
 				</Link>
 				<button
@@ -378,7 +382,10 @@ function ImageEditorHeader() {
 					<span className="text-sm font-semibold text-black/90 uppercase tracking-wide">
 						{projectName}
 					</span>
-					<HugeiconsIcon icon={ArrowDown01Icon} className="size-3 text-black/50" />
+					<HugeiconsIcon
+						icon={ArrowDown01Icon}
+						className="size-3 text-black/50"
+					/>
 				</button>
 			</div>
 
@@ -387,7 +394,10 @@ function ImageEditorHeader() {
 					type="button"
 					className="flex items-center justify-center size-9 rounded-full hover:bg-black/5 transition-colors"
 				>
-					<HugeiconsIcon icon={Settings02Icon} className="size-[18px] text-black/70" />
+					<HugeiconsIcon
+						icon={Settings02Icon}
+						className="size-[18px] text-black/70"
+					/>
 				</button>
 				<button
 					type="button"
@@ -523,7 +533,11 @@ function ImageCanvas({
 			// If right-clicked item isn't in selection, select only it
 			if (!selectedItemIds.includes(itemId)) {
 				setSelectedItemIds([itemId]);
-				setContextMenu({ x: event.clientX, y: event.clientY, itemIds: [itemId] });
+				setContextMenu({
+					x: event.clientX,
+					y: event.clientY,
+					itemIds: [itemId],
+				});
 			} else {
 				setContextMenu({
 					x: event.clientX,
@@ -754,7 +768,10 @@ function ImageCanvas({
 				{canvasItems.length === 0 && (
 					<div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-40">
 						<div className="w-20 h-20 mb-5 rounded-2xl bg-black/5 flex items-center justify-center">
-							<HugeiconsIcon icon={Image01Icon} className="size-8 text-black/30" />
+							<HugeiconsIcon
+								icon={Image01Icon}
+								className="size-8 text-black/30"
+							/>
 						</div>
 						<h2 className="text-lg font-medium text-black/60 mb-1">
 							No items on canvas
@@ -831,7 +848,10 @@ function ImageCanvas({
 									className="rounded-2xl overflow-hidden shadow-xl border border-black/5 bg-black/90 flex items-center justify-center hover:shadow-2xl transition-shadow"
 									style={{ height: item.height }}
 								>
-									<HugeiconsIcon icon={Video01Icon} className="size-10 text-white/40" />
+									<HugeiconsIcon
+										icon={Video01Icon}
+										className="size-10 text-white/40"
+									/>
 									<span className="absolute bottom-3 left-3 text-white/70 text-xs">
 										{item.prompt ?? "Video"}
 									</span>
@@ -852,8 +872,12 @@ function ImageCanvas({
 											aria-label={`Resize ${handle}`}
 											className="absolute w-3 h-3 bg-white border-2 border-blue-500 rounded-sm z-50 p-0"
 											style={{
-												...(handle.includes("n") ? { top: -6 } : { bottom: -6 }),
-												...(handle.includes("w") ? { left: -6 } : { right: -6 }),
+												...(handle.includes("n")
+													? { top: -6 }
+													: { bottom: -6 }),
+												...(handle.includes("w")
+													? { left: -6 }
+													: { right: -6 }),
 												cursor: `${handle}-resize`,
 											}}
 											onMouseDown={(event) =>
@@ -1079,9 +1103,10 @@ function ImageChatPanel({
 	const sendToRealApi = useCallback(
 		async (conversationHistory: Array<{ role: string; content: string }>) => {
 			// Build canvas context so the AI knows what's on the canvas
-			const canvasContext = canvasItems.length > 0
-				? `\nCanvas has ${canvasItems.length} item(s): ${canvasItems.map((i) => `${i.type}("${i.prompt ?? i.title ?? i.content ?? "untitled"}")`).join(", ")}.${selectedItemIds.length > 0 ? ` Selected: ${selectedItemIds.length} item(s).` : ""}`
-				: "";
+			const canvasContext =
+				canvasItems.length > 0
+					? `\nCanvas has ${canvasItems.length} item(s): ${canvasItems.map((i) => `${i.type}("${i.prompt ?? i.title ?? i.content ?? "untitled"}")`).join(", ")}.${selectedItemIds.length > 0 ? ` Selected: ${selectedItemIds.length} item(s).` : ""}`
+					: "";
 
 			const response = await fetch("/api/ai/chat", {
 				method: "POST",
@@ -1142,8 +1167,14 @@ function ImageChatPanel({
 
 					if (job.status === "completed") {
 						const outputData = job.output_data ?? job.output ?? {};
-						const urls = outputData.output ?? outputData.image_urls ?? outputData.urls ?? [];
-						const imageUrl = Array.isArray(urls) ? urls[0] : (outputData.output_url ?? undefined);
+						const urls =
+							outputData.output ??
+							outputData.image_urls ??
+							outputData.urls ??
+							[];
+						const imageUrl = Array.isArray(urls)
+							? urls[0]
+							: (outputData.output_url ?? undefined);
 						if (imageUrl) {
 							onAddImage({
 								type: "image",
@@ -1163,7 +1194,9 @@ function ImageChatPanel({
 					}
 
 					// Still processing — update progress step
-					const progress = job.progress ? `${Math.round(job.progress * 100)}%` : undefined;
+					const progress = job.progress
+						? `${Math.round(job.progress * 100)}%`
+						: undefined;
 					setActiveToolSteps((prev) => {
 						const updated = [...prev];
 						const genStep = updated.find((s) => s.id === "2");
@@ -1236,7 +1269,12 @@ function ImageChatPanel({
 				const genData = await genResp.json();
 
 				setActiveToolSteps([
-					{ id: "1", label: "Analyzed your request", status: "done", duration: "1s" },
+					{
+						id: "1",
+						label: "Analyzed your request",
+						status: "done",
+						duration: "1s",
+					},
 					{ id: "2", label: "Generating image...", status: "running" },
 				]);
 
@@ -1264,12 +1302,25 @@ function ImageChatPanel({
 					});
 				} else if (genData.jobId) {
 					// Async mode — poll for completion
-					imageUrl = await pollGenerationJob(genData.jobId, trimmed || "generated image");
+					imageUrl = await pollGenerationJob(
+						genData.jobId,
+						trimmed || "generated image",
+					);
 				}
 
 				const toolStepsDone: ToolStep[] = [
-					{ id: "1", label: "Analyzed your request", status: "done", duration: "1s" },
-					{ id: "2", label: imageUrl ? "Generated image" : "Generation failed", status: "done", duration: "done" },
+					{
+						id: "1",
+						label: "Analyzed your request",
+						status: "done",
+						duration: "1s",
+					},
+					{
+						id: "2",
+						label: imageUrl ? "Generated image" : "Generation failed",
+						status: "done",
+						duration: "done",
+					},
 				];
 
 				setActiveToolSteps(toolStepsDone);
@@ -1285,7 +1336,16 @@ function ImageChatPanel({
 						role: "assistant",
 						content: assistantContent,
 						toolSteps: toolStepsDone,
-						attachments: imageUrl ? [{ id: crypto.randomUUID(), type: "image", url: imageUrl, prompt: trimmed }] : undefined,
+						attachments: imageUrl
+							? [
+									{
+										id: crypto.randomUUID(),
+										type: "image",
+										url: imageUrl,
+										prompt: trimmed,
+									},
+								]
+							: undefined,
 					},
 				]);
 
@@ -1309,8 +1369,16 @@ function ImageChatPanel({
 					{
 						id: crypto.randomUUID(),
 						role: "assistant",
-						content: "I've created a placeholder image (API unavailable). It's been added to your canvas.",
-						toolSteps: [{ id: "1", label: "Created placeholder", status: "done", duration: "1s" }],
+						content:
+							"I've created a placeholder image (API unavailable). It's been added to your canvas.",
+						toolSteps: [
+							{
+								id: "1",
+								label: "Created placeholder",
+								status: "done",
+								duration: "1s",
+							},
+						],
 					},
 				]);
 				toast.success("Placeholder added to canvas");
@@ -1322,7 +1390,10 @@ function ImageChatPanel({
 			let apiContent = userContent;
 			if (attachments.length > 0) {
 				const attachmentDesc = attachments
-					.map((a, idx) => `${idx + 1}. ${a.type}: "${a.prompt ?? a.title ?? "untitled"}"`)
+					.map(
+						(a, idx) =>
+							`${idx + 1}. ${a.type}: "${a.prompt ?? a.title ?? "untitled"}"`,
+					)
 					.join("\n");
 				apiContent = `${userContent}\n\n[Attached from canvas:\n${attachmentDesc}]`;
 			}
@@ -1336,7 +1407,10 @@ function ImageChatPanel({
 			try {
 				responseText = await sendToRealApi(conversationHistory);
 			} catch {
-				responseText = await mockResponse(trimmed || "describe these items", chatMode);
+				responseText = await mockResponse(
+					trimmed || "describe these items",
+					chatMode,
+				);
 			}
 
 			const toolStepsDone: ToolStep[] = [
@@ -1357,7 +1431,18 @@ function ImageChatPanel({
 
 		setActiveToolSteps([]);
 		setIsGenerating(false);
-	}, [message, isGenerating, chatMode, messages, pendingAttachments, onAddImage, onClearPendingAttachments, sendToRealApi, mockResponse, pollGenerationJob]);
+	}, [
+		message,
+		isGenerating,
+		chatMode,
+		messages,
+		pendingAttachments,
+		onAddImage,
+		onClearPendingAttachments,
+		sendToRealApi,
+		mockResponse,
+		pollGenerationJob,
+	]);
 
 	const handleKeyDown = (event: React.KeyboardEvent) => {
 		if (event.key === "Enter" && !event.shiftKey) {
@@ -1405,8 +1490,7 @@ function ImageChatPanel({
 			<div
 				className="bg-white rounded-3xl shadow-2xl border border-black/10 flex flex-col overflow-hidden h-full"
 				style={{
-					boxShadow:
-						"0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
+					boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
 				}}
 			>
 				{/* Header */}
@@ -1449,11 +1533,7 @@ function ImageChatPanel({
 									)}
 								>
 									{activeChatName === "New Chat" && <CheckIcon />}
-									<span
-										className={
-											activeChatName !== "New Chat" ? "ml-5" : ""
-										}
-									>
+									<span className={activeChatName !== "New Chat" ? "ml-5" : ""}>
 										New Chat
 									</span>
 								</button>
@@ -1470,18 +1550,14 @@ function ImageChatPanel({
 									>
 										{activeChatName === projectName && <CheckIcon />}
 										<span
-											className={
-												activeChatName !== projectName ? "ml-5" : ""
-											}
+											className={activeChatName !== projectName ? "ml-5" : ""}
 										>
 											{projectName}
 										</span>
 									</button>
 								)}
 								{chatSessions
-									.filter(
-										(s) => s !== "New Chat" && s !== projectName,
-									)
+									.filter((s) => s !== "New Chat" && s !== projectName)
 									.map((session) => (
 										<button
 											key={session}
@@ -1496,9 +1572,7 @@ function ImageChatPanel({
 										>
 											{activeChatName === session && <CheckIcon />}
 											<span
-												className={
-													activeChatName !== session ? "ml-5" : ""
-												}
+												className={activeChatName !== session ? "ml-5" : ""}
 											>
 												{session}
 											</span>
@@ -1589,7 +1663,9 @@ function ImageChatPanel({
 													) : (
 														<div className="px-3 py-2 max-w-[140px]">
 															<p className="text-[10px] font-medium text-black/70 truncate">
-																{attachment.type === "text" ? attachment.title : attachment.prompt ?? "Item"}
+																{attachment.type === "text"
+																	? attachment.title
+																	: (attachment.prompt ?? "Item")}
 															</p>
 														</div>
 													)}
@@ -1641,9 +1717,7 @@ function ImageChatPanel({
 											)}
 											<span>{step.label}</span>
 											{step.duration && (
-												<span className="text-black/20">
-													{step.duration}
-												</span>
+												<span className="text-black/20">{step.duration}</span>
 											)}
 										</div>
 									))}
@@ -1711,17 +1785,12 @@ function ImageChatPanel({
 							<div ref={modeDropdownRef} className="relative">
 								<button
 									type="button"
-									onClick={() =>
-										setShowModeDropdown((prev) => !prev)
-									}
+									onClick={() => setShowModeDropdown((prev) => !prev)}
 									className="flex items-center gap-1.5 h-6 px-2 rounded-full text-xs text-black/40 hover:bg-black/5 transition-colors"
 								>
 									<ActiveModeIcon />
 									<span>
-										{
-											CHAT_MODES.find((m) => m.id === chatMode)
-												?.label
-										}
+										{CHAT_MODES.find((m) => m.id === chatMode)?.label}
 									</span>
 									<UpDownIcon />
 								</button>
@@ -1774,10 +1843,7 @@ function ImageChatPanel({
 											: "text-black/20 cursor-default",
 									)}
 								>
-									<HugeiconsIcon
-										icon={ArrowUp02Icon}
-										className="size-4"
-									/>
+									<HugeiconsIcon icon={ArrowUp02Icon} className="size-4" />
 								</button>
 							</div>
 						</div>

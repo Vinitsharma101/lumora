@@ -11,6 +11,8 @@ class GeminiProvider:
     name: AIProviderName = "gemini"
 
     def __init__(self, api_key: str):
+        if not api_key:
+            raise RuntimeError("GOOGLE_AI_API_KEY not configured")
         self._client = genai.Client(api_key=api_key)
 
     async def chat(
