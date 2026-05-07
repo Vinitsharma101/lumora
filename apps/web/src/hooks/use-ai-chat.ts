@@ -35,15 +35,67 @@ export function useAIChat() {
 			try {
 				const systemPrompt = buildSystemPrompt(editor);
 
-				const conversationHistory: AIMessage[] = messages.map((m) => ({
-					role: m.role,
-					content: m.content,
-					toolCalls: m.toolCalls?.map((tc) => ({
-						id: tc.id,
-						name: tc.name,
-						arguments: tc.result ? { result: tc.result } : {},
-					})),
-				}));
+				const conversationHistory: AIMessage[] = [];
+
+				// Track whether we need to prepend tool_results to the
+				// next user message (APIs require alternating roles).
+				let pendingToolResults: ToolResult[] | null = null;
+
+				for (const m of messages) {
+					if (m.role === "user") {
+						// Merge any pending tool results into this user message
+						conversationHistory.push({
+							role: "user",
+							content: m.content,
+							toolResults: pendingToolResults ?? undefined,
+						});
+						pendingToolResults = null;
+					} else {
+						// If we have orphaned tool results with no following
+						// user message, flush them as a standalone message first
+						if (pendingToolResults) {
+							conversationHistory.push({
+								role: "user",
+								content: "",
+								toolResults: pendingToolResults,
+							});
+							pendingToolResults = null;
+						}
+
+						const completedTools = m.toolCalls?.filter(
+							(tc) => tc.status === "success" || tc.status === "error",
+						);
+
+						conversationHistory.push({
+							role: m.role,
+							content: m.content,
+							toolCalls: completedTools?.map((tc) => ({
+								id: tc.id,
+								name: tc.name,
+								arguments: tc.arguments ?? {},
+							})),
+						});
+
+						// Queue tool results to attach to the next user message
+						if (completedTools && completedTools.length > 0) {
+							pendingToolResults = completedTools.map((tc) => ({
+								toolCallId: tc.id,
+								content: tc.result ?? tc.error ?? "",
+								isError: tc.status === "error",
+							}));
+						}
+					}
+				}
+
+				// Flush any remaining tool results before the new user message
+				if (pendingToolResults) {
+					conversationHistory.push({
+						role: "user",
+						content: "",
+						toolResults: pendingToolResults,
+					});
+					pendingToolResults = null;
+				}
 
 				conversationHistory.push({
 					role: "user",
@@ -119,6 +171,7 @@ export function useAIChat() {
 											...toolStatuses[idx],
 											status: "executing",
 											description: `Executing ${chunk.toolCall.name}...`,
+											arguments: chunk.toolCall.arguments as Record<string, unknown>,
 										};
 										updateLastMessage({ toolCalls: [...toolStatuses] });
 									}

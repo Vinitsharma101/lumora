@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ai"])
 
 @router.post("/api/ai/music", response_model=AIJobResponse)
+@router.post("/ai/music", response_model=AIJobResponse)
 async def generate_music(
     body: MusicRequest,
     request: Request,
@@ -26,24 +27,39 @@ async def generate_music(
     """Generate background music using AI asynchronously."""
     await check_rate_limit(request)
 
-    job = await create_ai_job(
-        db=db,
-        user_id=user.id,
-        job_type="music_generation",
-        input_data={
-            "prompt": body.prompt,
-            "duration": body.duration,
-            "style": body.style,
-        },
-        project_id=None,
-        provider="replicate",
+    logger.info(
+        "ai.music hit: user_id=%s prompt=%r duration=%s style=%r",
+        user.id,
+        body.prompt,
+        body.duration,
+        body.style,
     )
 
-    await enqueue_ai_job(job.id, "music_generation")
+    try:
+        job = await create_ai_job(
+            db=db,
+            user_id=user.id,
+            job_type="music_generation",
+            input_data={
+                "prompt": body.prompt,
+                "duration": body.duration,
+                "style": body.style,
+            },
+            project_id=None,
+            provider="replicate",
+        )
 
-    return AIJobResponse(
-        job_id=job.id,
-        status=job.status,
-        job_type=job.job_type,
-        progress=job.progress,
-    )
+        queued = await enqueue_ai_job(job.id, "music_generation")
+
+        response = AIJobResponse(
+            job_id=job.id,
+            status=job.status,
+            job_type=job.job_type,
+            progress=job.progress,
+        )
+        if not queued:
+            logger.warning("music job created but queue unavailable: %s", job.id)
+        return response
+    except Exception as exc:
+        logger.error("ai.music failed: %s", exc, exc_info=True)
+        raise

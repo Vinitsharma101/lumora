@@ -62,7 +62,7 @@ async def _get_or_create_dev_user(db: AsyncSession) -> User:
     if user:
         return user
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     user = User(
         id=DEV_USER_ID,
         name="Dev User",
@@ -84,15 +84,7 @@ async def get_current_user(
 ) -> User:
     # Dev mode: skip auth when no token provided
     if not credentials and settings.DEV_MODE:
-        now = datetime.now(timezone.utc)
-        return User(
-            id=DEV_USER_ID,
-            name="Dev User",
-            email="dev@localhost",
-            email_verified=True,
-            created_at=now,
-            updated_at=now,
-        )
+        return await _get_or_create_dev_user(db)
 
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")

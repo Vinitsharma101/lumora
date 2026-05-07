@@ -16,12 +16,12 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.orchestrator import AgentOrchestrator
-from app.auth import _get_or_create_dev_user
-from app.config import settings
 from app.database import get_db
+from app.models import Project
 from app.services.character_service import CharacterService
 from app.services.cost_estimator import estimate_pipeline_cost
 from app.auth import get_current_user_optional
@@ -70,11 +70,23 @@ async def execute_agent(
     db: AsyncSession = Depends(get_db),
 ):
     """Start the autonomous agentic video creation pipeline."""
+    logger.info(
+        "agent.execute hit: project_id=%s user_id=%s query=%r context_keys=%s media_assets=%d",
+        project_id,
+        getattr(user, "id", None),
+        request.query,
+        list(request.context.keys()) if isinstance(request.context, dict) else None,
+        len(request.media_asset_ids),
+    )
+
     if user:
         user_id = user.id
     else:
-        dev_user = await _get_or_create_dev_user(db)
-        user_id = dev_user.id
+        project_result = await db.execute(select(Project).where(Project.id == project_id))
+        project = project_result.scalar_one_or_none()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        user_id = project.user_id
 
     orchestrator = AgentOrchestrator(
         project_id=project_id,

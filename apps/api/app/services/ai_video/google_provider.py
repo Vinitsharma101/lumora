@@ -148,7 +148,7 @@ class GoogleAIProvider:
         if negative_prompt:
             parameters["negativePrompt"] = negative_prompt
         response = await client.post(
-            f"{self._generative_url}/models/imagen-3.0-generate-002:predict",
+            f"{self._generative_url}/models/imagen-3.0-generate-001:predict",
             headers={
                 "Content-Type": "application/json",
                 "x-goog-api-key": api_key,

@@ -1,6 +1,6 @@
 import type React from "react";
 import { Composition, registerRoot } from "remotion";
-import { COMPOSITION_REGISTRY } from "./compositions";
+import { COMPOSITION_REGISTRY, getCompositionDimensions } from "./compositions";
 
 /**
  * Remotion Root component — registers all motion-graphic compositions.
@@ -10,18 +10,24 @@ export const RemotionRoot: React.FC = () => {
 	return (
 		<>
 			{Object.entries(COMPOSITION_REGISTRY).map(
-				([id, { component: Component, defaultProps, defaultDurationInFrames }]) => (
-					<Composition
-						key={id}
-						id={id}
-						component={Component}
-						durationInFrames={defaultDurationInFrames}
-						fps={30}
-						width={1920}
-						height={1080}
-						defaultProps={defaultProps}
-					/>
-				),
+				([
+					id,
+					{ component: Component, defaultProps, defaultDurationInFrames },
+				]) => {
+					const { width, height, fps } = getCompositionDimensions(id);
+					return (
+						<Composition
+							key={id}
+							id={id}
+							component={Component}
+							durationInFrames={defaultDurationInFrames}
+							fps={fps}
+							width={width}
+							height={height}
+							defaultProps={defaultProps}
+						/>
+					);
+				},
 			)}
 		</>
 	);

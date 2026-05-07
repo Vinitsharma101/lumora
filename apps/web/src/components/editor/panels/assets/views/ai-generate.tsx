@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useEditor } from "@/hooks/use-editor";
 import {
 	generateTextToVideo,
 	generateImageToVideo,
@@ -39,6 +39,8 @@ interface JobTracker {
 }
 
 export function AIGenerateView() {
+	const editor = useEditor();
+	const projectId = editor.project.getActive()?.metadata.id;
 	const [mode, setMode] = useState<AIMode>("text-to-video");
 	const [prompt, setPrompt] = useState("");
 	const [imageUrl, setImageUrl] = useState("");
@@ -52,13 +54,13 @@ export function AIGenerateView() {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const pollJob = useCallback(
-		async ({ jobId, index }: { jobId: string; index: number }) => {
+		async ({ jobId }: { jobId: string }) => {
 			const poll = async () => {
 				try {
 					const status = await getAIJobStatus({ jobId });
 					setJobs((previous) =>
-						previous.map((job, idx) =>
-							idx === index
+						previous.map((job) =>
+							job.jobId === jobId
 								? {
 										...job,
 										status: status.status,
@@ -98,6 +100,7 @@ export function AIGenerateView() {
 					aspectRatio,
 					provider,
 					action: "preview",
+					projectId,
 				});
 			} else if (mode === "image-to-video") {
 				response = await generateImageToVideo({
@@ -105,24 +108,26 @@ export function AIGenerateView() {
 					prompt,
 					duration,
 					provider,
+					projectId,
 				});
 			} else if (mode === "script-to-scenes") {
 				response = await generateScriptToScenes({
 					script,
 					aspectRatio,
+					projectId,
 				});
 			} else if (mode === "bg-remove") {
-				response = await removeBackground({ imageUrl });
+				response = await removeBackground({ imageUrl, projectId });
 			} else if (mode === "upscale") {
-				response = await upscaleImage({ imageUrl, scale });
+				response = await upscaleImage({ imageUrl, scale, projectId });
 			} else {
 				response = await styleTransfer({
 					imageUrl,
 					stylePreset,
+					projectId,
 				});
 			}
 
-			const newIndex = jobs.length;
 			const tracker: JobTracker = {
 				jobId: response.job_id,
 				type: mode,
@@ -136,7 +141,7 @@ export function AIGenerateView() {
 			};
 			setJobs((previous) => [...previous, tracker]);
 
-			pollJob({ jobId: response.job_id, index: newIndex });
+			pollJob({ jobId: response.job_id });
 		} catch (error) {
 			console.error("Failed to start AI job:", error);
 		} finally {
@@ -152,8 +157,8 @@ export function AIGenerateView() {
 		aspectRatio,
 		stylePreset,
 		scale,
-		jobs.length,
 		pollJob,
+		projectId,
 	]);
 
 	const handleFinalize = useCallback(
@@ -168,10 +173,9 @@ export function AIGenerateView() {
 					provider: job.request.provider ?? provider,
 					action: "finalize",
 					sourceJobId: job.jobId,
-					projectId: undefined,
+					projectId,
 				});
 
-				const newIndex = jobs.length;
 				const tracker: JobTracker = {
 					jobId: response.job_id,
 					type: "text-to-video finalize",
@@ -180,14 +184,14 @@ export function AIGenerateView() {
 					result: null,
 				};
 				setJobs((previous) => [...previous, tracker]);
-				pollJob({ jobId: response.job_id, index: newIndex });
+				pollJob({ jobId: response.job_id });
 			} catch (error) {
 				console.error("Failed to finalize AI video:", error);
 			} finally {
 				setIsSubmitting(false);
 			}
 		},
-		[aspectRatio, duration, jobs.length, pollJob, prompt, provider],
+		[aspectRatio, duration, pollJob, prompt, provider, projectId],
 	);
 
 	const modes: Array<{ value: AIMode; label: string }> = [
@@ -485,11 +489,9 @@ export function AIGenerateView() {
 														className="bg-background overflow-hidden rounded border"
 													>
 														{(frame.image_url || frame.output_url) && (
-															<Image
+															<img
 																src={frame.image_url ?? frame.output_url ?? ""}
 																alt={frame.id}
-																width={320}
-																height={180}
 																className="h-20 w-full object-cover"
 															/>
 														)}

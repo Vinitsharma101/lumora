@@ -4,6 +4,10 @@ import { readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
+import {
+	getCompositionEntry,
+	resolveCompositionRenderConfig,
+} from "@/lib/remotion/compositions";
 
 /**
  * Cached bundle path — Remotion bundling is expensive, so we cache the
@@ -63,6 +67,22 @@ export async function POST(request: Request): Promise<NextResponse> {
 			);
 		}
 
+		const compositionEntry = getCompositionEntry(compositionId);
+		if (!compositionEntry) {
+			return NextResponse.json(
+				{ error: `Unknown compositionId: ${compositionId}` },
+				{ status: 400 },
+			);
+		}
+
+		const renderConfig = resolveCompositionRenderConfig(compositionId, {
+			width,
+			height,
+			fps,
+			durationInFrames,
+			props,
+		});
+
 		// Bundle the Remotion project (cached after first call)
 		const bundlePath = await getBundle();
 
@@ -71,16 +91,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 		const composition = await selectComposition({
 			serveUrl: bundlePath,
 			id: compositionId,
-			inputProps: props,
+			inputProps: renderConfig.props,
 		});
 
 		// Override dimensions and duration if provided
-		composition.width = width;
-		composition.height = height;
-		composition.fps = fps;
-		if (durationInFrames) {
-			composition.durationInFrames = durationInFrames;
-		}
+		composition.width = renderConfig.width;
+		composition.height = renderConfig.height;
+		composition.fps = renderConfig.fps;
+		composition.durationInFrames = renderConfig.durationInFrames;
 
 		// Render to a temporary file
 		const outputPath = join(
@@ -94,7 +112,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 			serveUrl: bundlePath,
 			codec: "vp8",
 			outputLocation: outputPath,
-			inputProps: props,
+			inputProps: renderConfig.props,
 		});
 
 		const timeoutPromise = new Promise<never>((_, reject) => {

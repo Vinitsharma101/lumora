@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,10 +11,18 @@ from app.routers import projects, media, render, ai_video, auto_edit, collaborat
 from app.routers import agent as agent_router
 from app.routers import transcription
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Startup/shutdown lifecycle: create tables, initialize Supabase buckets, clean up on shutdown."""
+    logger.info("Registered routes at startup:")
+    for route in application.routes:
+        path = getattr(route, "path", None)
+        if path:
+            logger.info(path)
+
     # Auto-create tables for local dev (no-op if they already exist)
     try:
         from app.database import engine
@@ -70,3 +79,10 @@ app.include_router(transcription.router)
 
 # --- agentic pipeline ---
 app.include_router(agent_router.router)
+
+
+@app.get("/api/debug/routes")
+async def debug_routes():
+    return {
+        "routes": [route.path for route in app.routes if getattr(route, "path", None)],
+    }

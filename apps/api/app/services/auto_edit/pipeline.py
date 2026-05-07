@@ -11,6 +11,11 @@ Coordinates all auto-edit sub-tasks via cloud APIs — no local models.
 from datetime import datetime, timezone
 from uuid import uuid4
 
+
+def _utcnow() -> datetime:
+    """Return a timezone-naive UTC datetime compatible with 'timestamp without time zone' columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AIJob
@@ -25,7 +30,7 @@ async def create_auto_edit_job(
     provider: str = "replicate",
 ) -> AIJob:
     """Create a tracked AI job for auto-edit operations."""
-    now = datetime.now(timezone.utc)
+    now = _utcnow()
     job = AIJob(
         id=str(uuid4()),
         user_id=user_id,
@@ -70,6 +75,6 @@ async def update_job_status(
     if provider_job_id is not None:
         job.provider_job_id = provider_job_id
     if status in ("completed", "failed"):
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = _utcnow()
 
     await db.commit()

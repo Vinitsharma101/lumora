@@ -46,7 +46,7 @@ async def create_session(
 ):
     await check_rate_limit(request)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     session_id = str(uuid4())
 
     session = AIChatSession(
@@ -139,7 +139,7 @@ async def create_message(
         return JSONResponse({"error": "Session not found"}, status_code=404)
 
     message_id = str(uuid4())
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     message = AIChatMessage(
         id=message_id,

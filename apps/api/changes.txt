@@ -94,3 +94,540 @@ Frontend Step 4 Plan
 - Why: the job list should clearly show the preview and final states so the user knows what stage the workflow is in.
 - What changes: give `preview_ready` its own visual state and show a link to the final video when the job is completed.
 - How to check: run the full preview/finalize flow and confirm the badge color changes and the final video link appears after completion.
+
+
+
+
+(venv) api> venv\Scripts\python -m arq app.worker.WorkerSettings
+15:37:02: Starting worker for 10 functions: process_render_job, process_ai_job, process_movie_ingestion, process_movie_analysis, process_movie_director, process_movie_act, process_movie_scene, process_movie_consistency, process_movie_review, process_movie_assembly
+15:37:02: redis_version=7.4.8 mem_usage=1.23M clients_connected=3 db_keys=9
+15:37:02: 75574.96s → 2469767162d44c76b1c55de9951e5f9c:process_ai_job('ff1fe358-8db3-4398-b6ab-61792fc877de', 'text_to_video') delayed=75574.96s
+15:37:03: 75493.58s → 63820f2021704c7f9ec4fcc5af3fac78:process_ai_job('75027b8a-50c7-44a0-85bb-46c55d1c80c5', 'text_to_video') delayed=75493.58s
+15:37:03: 74998.71s → 283e485a52114dd793523c3b70f6fd79:process_ai_job('4c9d79ed-514e-4918-8c09-1b2995eea974', 'text_to_video') delayed=74998.71s
+15:37:03: 74991.16s → 16ba0175ae2448ed8b03aa99ef9a5566:process_ai_job('cdb68f3f-c8a7-402c-8729-dc159b0280b3', 'text_to_video') delayed=74991.16s
+15:37:03: 74983.30s → 774e9416ad884c7fb0ae4347b23c7fd7:process_ai_job('57531b0d-d639-4af9-ae1f-c553b6646baf', 'text_to_video') delayed=74983.30s
+15:37:03: 74966.32s → 04772e16614a44ab988e4a8c8ee00808:process_ai_job('9435b46a-644a-4b6f-aa7f-a8b592a439a2', 'music_generation') delayed=74966.32s
+15:37:03: 252.09s → 0f02e46a7af141faa2237b51112b4df4:process_ai_job('3913e5f1-d43e-4f19-a84d-6322596acd8a', 'text_to_video') delayed=252.09s
+Frame generation failed on attempt 1/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+Frame generation failed on attempt 1/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+Frame generation failed on attempt 1/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+Frame generation failed on attempt 1/3: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~10s.
+AI job 9435b46a-644a-4b6f-aa7f-a8b592a439a2 failed
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 982, in process_ai_job
+    ai_result = await provider.generate_music(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\services\ai_video\replicate_provider.py", line 553, in generate_music
+    return await self.run_and_wait(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\services\ai_video\replicate_provider.py", line 132, in run_and_wait
+    prediction = await asyncio.to_thread(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\replicate\prediction.py", line 467, in create
+    return Models(self._client).predictions.create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\replicate\model.py", line 405, in create
+    resp = self._client._request("POST", path, json=body, **extras)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\replicate\client.py", line 89, in _request
+    _raise_for_status(resp)
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\replicate\client.py", line 407, in _raise_for_status
+    raise ReplicateError.from_response(resp)
+replicate.exceptions.ReplicateError: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~10s.
+Frame generation failed on attempt 1/3: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~8s.
+Frame generation failed on attempt 2/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+Frame generation failed on attempt 2/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+Frame generation failed on attempt 2/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+15:37:17:  13.33s ← 04772e16614a44ab988e4a8c8ee00808:process_ai_job ● {'error': 'ReplicateError Details:\nstatus: 429\ndetail: Request was throttled.…
+Frame generation failed on attempt 2/3: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~6s.
+Failed to re-upload Replicate frame, using original URL: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment variables
+Frame generation failed on attempt 2/3: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~4s.
+Frame generation failed on attempt 1/3: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~3s.
+Frame generation failed on attempt 3/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+AI job 4c9d79ed-514e-4918-8c09-1b2995eea974 failed
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 723, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1039, in create_connection
+    infos = await self._ensure_resolved(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1413, in _ensure_resolved
+    return await loop.getaddrinfo(host, port, family=family, type=type,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 867, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 290, in connect
+    await self.retry.call_with_retry(
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\retry.py", line 59, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 722, in _connect
+    async with async_timeout(self.socket_connect_timeout):
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\timeouts.py", line 98, in __aexit__
+    raise TimeoutError
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 309, in run
+    self.loop.run_until_complete(self.main_task)
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 653, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 362, in main
+    await self._poll_iteration()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 400, in _poll_iteration
+    t.result()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 484, in run_job
+    v, job_try, _ = await pipe.execute()
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\client.py", line 1567, in execute
+    conn = await self.connection_pool.get_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1100, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1133, in ensure_connection
+    await connection.connect()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    raise TimeoutError("Timeout connecting to server")
+redis.exceptions.TimeoutError: Timeout connecting to server
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 399, in process_ai_job
+    preview_frames = await _generate_preview_frames(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 76, in _generate_preview_frames
+    result = await _retry_frame_generation(lambda _p=_prompt: provider.generate_image(prompt=_p, aspect_ratio="16:9", count=1))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 52, in _retry_frame_generation
+    raise RuntimeError(f"Frame generation failed after {attempts} attempts: {last_error}")
+RuntimeError: Frame generation failed after 3 attempts: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+Frame generation failed on attempt 3/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+AI job cdb68f3f-c8a7-402c-8729-dc159b0280b3 failed
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 723, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1039, in create_connection
+    infos = await self._ensure_resolved(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1413, in _ensure_resolved
+    return await loop.getaddrinfo(host, port, family=family, type=type,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 867, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 290, in connect
+    await self.retry.call_with_retry(
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\retry.py", line 59, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 722, in _connect
+    async with async_timeout(self.socket_connect_timeout):
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\timeouts.py", line 98, in __aexit__
+    raise TimeoutError
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 309, in run
+    self.loop.run_until_complete(self.main_task)
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 653, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 362, in main
+    await self._poll_iteration()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 400, in _poll_iteration
+    t.result()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 484, in run_job
+    v, job_try, _ = await pipe.execute()
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\client.py", line 1567, in execute
+    conn = await self.connection_pool.get_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1100, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1133, in ensure_connection
+    await connection.connect()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    raise TimeoutError("Timeout connecting to server")
+redis.exceptions.TimeoutError: Timeout connecting to server
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 399, in process_ai_job
+    preview_frames = await _generate_preview_frames(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 76, in _generate_preview_frames
+    result = await _retry_frame_generation(lambda _p=_prompt: provider.generate_image(prompt=_p, aspect_ratio="16:9", count=1))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 52, in _retry_frame_generation
+    raise RuntimeError(f"Frame generation failed after {attempts} attempts: {last_error}")
+RuntimeError: Frame generation failed after 3 attempts: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+Frame generation failed on attempt 3/3: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+AI job 57531b0d-d639-4af9-ae1f-c553b6646baf failed
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 723, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1039, in create_connection
+    infos = await self._ensure_resolved(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1413, in _ensure_resolved
+    return await loop.getaddrinfo(host, port, family=family, type=type,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 867, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 290, in connect
+    await self.retry.call_with_retry(
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\retry.py", line 59, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 722, in _connect
+    async with async_timeout(self.socket_connect_timeout):
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\timeouts.py", line 98, in __aexit__
+    raise TimeoutError
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 309, in run
+    self.loop.run_until_complete(self.main_task)
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 653, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 362, in main
+    await self._poll_iteration()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 400, in _poll_iteration
+    t.result()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 484, in run_job
+    v, job_try, _ = await pipe.execute()
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\client.py", line 1567, in execute
+    conn = await self.connection_pool.get_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1100, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1133, in ensure_connection
+    await connection.connect()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    raise TimeoutError("Timeout connecting to server")
+redis.exceptions.TimeoutError: Timeout connecting to server
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 399, in process_ai_job
+    preview_frames = await _generate_preview_frames(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 76, in _generate_preview_frames
+    result = await _retry_frame_generation(lambda _p=_prompt: provider.generate_image(prompt=_p, aspect_ratio="16:9", count=1))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 52, in _retry_frame_generation
+    raise RuntimeError(f"Frame generation failed after {attempts} attempts: {last_error}")
+RuntimeError: Frame generation failed after 3 attempts: Client error '404 Not Found' for url 'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+Frame generation failed on attempt 3/3: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~2s.
+AI job 75027b8a-50c7-44a0-85bb-46c55d1c80c5 failed
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 723, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1039, in create_connection
+    infos = await self._ensure_resolved(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1413, in _ensure_resolved
+    return await loop.getaddrinfo(host, port, family=family, type=type,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 867, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 290, in connect
+    await self.retry.call_with_retry(
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\retry.py", line 59, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 722, in _connect
+    async with async_timeout(self.socket_connect_timeout):
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\timeouts.py", line 98, in __aexit__
+    raise TimeoutError
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 309, in run
+    self.loop.run_until_complete(self.main_task)
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 653, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 362, in main
+    await self._poll_iteration()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 400, in _poll_iteration
+    t.result()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 484, in run_job
+    v, job_try, _ = await pipe.execute()
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\client.py", line 1567, in execute
+    conn = await self.connection_pool.get_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1100, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1133, in ensure_connection
+    await connection.connect()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    raise TimeoutError("Timeout connecting to server")
+redis.exceptions.TimeoutError: Timeout connecting to server
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 399, in process_ai_job
+    preview_frames = await _generate_preview_frames(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 105, in _generate_preview_frames
+    result = await _retry_frame_generation(lambda _p=_prompt: provider.text_to_image(prompt=_p, width=1024, height=1024, model="schnell", wait=True))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 52, in _retry_frame_generation
+    raise RuntimeError(f"Frame generation failed after {attempts} attempts: {last_error}")
+RuntimeError: Frame generation failed after 3 attempts: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~2s.
+15:37:21:  17.40s ← 283e485a52114dd793523c3b70f6fd79:process_ai_job ● {'error': "Frame generation failed after 3 attempts: Client error '404 Not Foun…
+15:37:21:  17.70s ← 16ba0175ae2448ed8b03aa99ef9a5566:process_ai_job ● {'error': "Frame generation failed after 3 attempts: Client error '404 Not Foun…
+15:37:21:  17.69s ← 774e9416ad884c7fb0ae4347b23c7fd7:process_ai_job ● {'error': "Frame generation failed after 3 attempts: Client error '404 Not Foun…
+15:37:22:  18.53s ← 63820f2021704c7f9ec4fcc5af3fac78:process_ai_job ● {'error': 'Frame generation failed after 3 attempts: ReplicateError Details:\ns…
+Frame generation failed on attempt 3/3: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~1s.
+AI job ff1fe358-8db3-4398-b6ab-61792fc877de failed
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 723, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1039, in create_connection
+    infos = await self._ensure_resolved(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1413, in _ensure_resolved
+    return await loop.getaddrinfo(host, port, family=family, type=type,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 867, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 290, in connect
+    await self.retry.call_with_retry(
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\retry.py", line 59, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 722, in _connect
+    async with async_timeout(self.socket_connect_timeout):
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\timeouts.py", line 98, in __aexit__
+    raise TimeoutError
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 309, in run
+    self.loop.run_until_complete(self.main_task)
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 653, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 362, in main
+    await self._poll_iteration()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 400, in _poll_iteration
+    t.result()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 484, in run_job
+    v, job_try, _ = await pipe.execute()
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\client.py", line 1567, in execute
+    conn = await self.connection_pool.get_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1100, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1133, in ensure_connection
+    await connection.connect()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    raise TimeoutError("Timeout connecting to server")
+redis.exceptions.TimeoutError: Timeout connecting to server
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 399, in process_ai_job
+    preview_frames = await _generate_preview_frames(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 105, in _generate_preview_frames
+    result = await _retry_frame_generation(lambda _p=_prompt: provider.text_to_image(prompt=_p, width=1024, height=1024, model="schnell", wait=True))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\app\worker.py", line 52, in _retry_frame_generation
+    raise RuntimeError(f"Frame generation failed after {attempts} attempts: {last_error}")
+RuntimeError: Frame generation failed after 3 attempts: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~1s.
+Frame generation failed on attempt 2/3: ReplicateError Details:
+status: 429
+detail: Request was throttled. Your rate limit for creating predictions is reduced to 6 requests per minute with a burst of 1 requests while you have less than $5.0 in credit. Your rate limit resets in ~1s.
+15:37:24:  21.95s ← 2469767162d44c76b1c55de9951e5f9c:process_ai_job ● {'error': 'Frame generation failed after 3 attempts: ReplicateError Details:\ns…
+Failed to re-upload Replicate frame, using original URL: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment variables
+15:37:32:  28.97s ← 0f02e46a7af141faa2237b51112b4df4:process_ai_job ● {'status': 'preview_ready', 'output': [{'id': 'frame-001', 'index': 1, 'prompt'…
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 723, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1039, in create_connection
+    infos = await self._ensure_resolved(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 1413, in _ensure_resolved
+    return await loop.getaddrinfo(host, port, family=family, type=type,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 867, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 290, in connect
+    await self.retry.call_with_retry(
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\retry.py", line 59, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 722, in _connect
+    async with async_timeout(self.socket_connect_timeout):
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\timeouts.py", line 98, in __aexit__
+    raise TimeoutError
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\__main__.py", line 4, in <module>
+    cli()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\click\core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\click\core.py", line 1406, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\click\core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\click\core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\cli.py", line 54, in cli
+    run_worker(worker_settings_, **kwargs)
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 895, in run_worker
+    worker.run()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 309, in run
+    self.loop.run_until_complete(self.main_task)
+  File "C:\Users\vinit\AppData\Local\Programs\Python\Python311\Lib\asyncio\base_events.py", line 653, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 362, in main
+    await self._poll_iteration()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 400, in _poll_iteration
+    t.result()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\arq\worker.py", line 484, in run_job
+    v, job_try, _ = await pipe.execute()
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\client.py", line 1567, in execute
+    conn = await self.connection_pool.get_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1100, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 1133, in ensure_connection
+    await connection.connect()
+  File "C:\Users\vinit\desktop\Grace-Studio\apps\api\venv\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    raise TimeoutError("Timeout connecting to server")
+redis.exceptions.TimeoutError: Timeout connecting to server
+(venv) api> venv\Scripts\python -m arq app.worker.WorkerSettings
+15:45:43: Starting worker for 10 functions: process_render_job, process_ai_job, process_movie_ingestion, process_movie_analysis, process_movie_director, process_movie_act, process_movie_scene, process_movie_consistency, process_movie_review, process_movie_assembly
+15:45:43: redis_version=7.4.8 mem_usage=1.42M clients_connected=3 db_keys=11

@@ -10,11 +10,17 @@ export interface CompositionEntry {
 	component: React.FC<any>;
 	defaultProps: Record<string, unknown>;
 	defaultDurationInFrames: number;
+	width?: number;
+	height?: number;
+	fps?: number;
 }
 
 export const COMPOSITION_REGISTRY: Record<string, CompositionEntry> = {
 	"lower-third": {
 		component: LowerThird,
+		width: 1920,
+		height: 1080,
+		fps: 30,
 		defaultProps: {
 			primaryText: "Name",
 			secondaryText: "Title",
@@ -25,6 +31,9 @@ export const COMPOSITION_REGISTRY: Record<string, CompositionEntry> = {
 	},
 	"title-card": {
 		component: TitleCard,
+		width: 1920,
+		height: 1080,
+		fps: 30,
 		defaultProps: {
 			title: "Title",
 			subtitle: "",
@@ -35,6 +44,9 @@ export const COMPOSITION_REGISTRY: Record<string, CompositionEntry> = {
 	},
 	"subscribe-cta": {
 		component: SubscribeCTA,
+		width: 1920,
+		height: 1080,
+		fps: 30,
 		defaultProps: {
 			channelName: "Subscribe",
 			accentColor: "#FF0000",
@@ -43,6 +55,9 @@ export const COMPOSITION_REGISTRY: Record<string, CompositionEntry> = {
 	},
 	countdown: {
 		component: Countdown,
+		width: 1920,
+		height: 1080,
+		fps: 30,
 		defaultProps: {
 			from: 3,
 			color: "#ffffff",
@@ -52,6 +67,9 @@ export const COMPOSITION_REGISTRY: Record<string, CompositionEntry> = {
 	},
 	"text-reveal": {
 		component: TextReveal,
+		width: 1920,
+		height: 1080,
+		fps: 30,
 		defaultProps: {
 			text: "Your Text Here",
 			color: "#ffffff",
@@ -61,3 +79,66 @@ export const COMPOSITION_REGISTRY: Record<string, CompositionEntry> = {
 		defaultDurationInFrames: 90,
 	},
 };
+
+export function getCompositionEntry(
+	compositionId: string,
+): CompositionEntry | null {
+	return COMPOSITION_REGISTRY[compositionId] ?? null;
+}
+
+export function getDefaultCompositionProps(
+	compositionId: string,
+): Record<string, unknown> {
+	return getCompositionEntry(compositionId)?.defaultProps ?? {};
+}
+
+export function getDefaultCompositionDuration(
+	compositionId: string,
+): number | null {
+	return getCompositionEntry(compositionId)?.defaultDurationInFrames ?? null;
+}
+
+export function getCompositionDimensions(compositionId: string): {
+	width: number;
+	height: number;
+	fps: number;
+} {
+	const entry = getCompositionEntry(compositionId);
+	return {
+		width: entry?.width ?? 1920,
+		height: entry?.height ?? 1080,
+		fps: entry?.fps ?? 30,
+	};
+}
+
+export function resolveCompositionRenderConfig(
+	compositionId: string,
+	overrides?: {
+		width?: number;
+		height?: number;
+		fps?: number;
+		durationInFrames?: number;
+		props?: Record<string, unknown>;
+	},
+): {
+	width: number;
+	height: number;
+	fps: number;
+	durationInFrames: number;
+	props: Record<string, unknown>;
+} {
+	const dimensions = getCompositionDimensions(compositionId);
+	return {
+		width: overrides?.width ?? dimensions.width,
+		height: overrides?.height ?? dimensions.height,
+		fps: overrides?.fps ?? dimensions.fps,
+		durationInFrames:
+			overrides?.durationInFrames ??
+			getDefaultCompositionDuration(compositionId) ??
+			30 * 5,
+		props: {
+			...getDefaultCompositionProps(compositionId),
+			...(overrides?.props ?? {}),
+		},
+	};
+}

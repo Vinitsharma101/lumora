@@ -44,6 +44,18 @@ const nextConfig: NextConfig = {
 				protocol: "https",
 				hostname: "api.unisvg.com",
 			},
+			{
+				protocol: "https",
+				hostname: "**.supabase.co",
+			},
+			{
+				protocol: "https",
+				hostname: "**.replicate.delivery",
+			},
+			{
+				protocol: "https",
+				hostname: "replicate.delivery",
+			},
 		],
 	},
 };

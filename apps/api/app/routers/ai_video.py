@@ -53,6 +53,18 @@ class _LocalJob:
         self.progress = 0.0
 
 
+def _job_to_response(job: AIJob | _LocalJob) -> AIJobResponse:
+    return AIJobResponse(
+        job_id=job.id,
+        status=job.status,
+        job_type=job.job_type,
+        progress=job.progress,
+        output_data=getattr(job, "output_data", None),
+        output_url=getattr(job, "output_url", None),
+        error_message=getattr(job, "error_message", None),
+    )
+
+
 async def _safe_create_job(
     *,
     db: AsyncSession,
@@ -82,7 +94,21 @@ async def _safe_enqueue(job_id: str, job_type: str) -> None:
         await enqueue_ai_job(job_id, job_type)
     except Exception as exc:
         logger.warning("Skipping enqueue for %s job %s: %s", job_type, job_id, exc)
+
+
+@router.get("/api/ai/video/status/{job_id}")
+@router.get("/ai/video/status/{job_id}")
+async def get_video_job_status(job_id: str, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+
+    result = await db.execute(select(AIJob).where(AIJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return _job_to_response(job)
 @router.post("/api/ai/video/text-to-video", response_model=AIJobResponse)
+@router.post("/ai/video/text-to-video", response_model=AIJobResponse)
 async def text_to_video(
     body: TextToVideoRequest,
     request: Request,
@@ -91,35 +117,50 @@ async def text_to_video(
 ):
     """Generate video from a text prompt using cloud AI models."""
     await check_rate_limit(request)
-
-    job = await create_ai_job(
-        db=db,
-        user_id=user.id,
-        job_type="text_to_video",
-        input_data={
-            "prompt": body.prompt,
-            "duration": body.duration,
-            "aspect_ratio": body.aspect_ratio,
-            "style": body.style,
-            "provider": body.provider,
-            "action": body.action,
-            "source_job_id": body.source_job_id,
-        },
-        project_id=body.project_id,
-        provider=body.provider,
+    logger.info(
+        "ai.video.text_to_video hit: user_id=%s project_id=%s prompt=%r provider=%r",
+        user.id,
+        body.project_id,
+        body.prompt,
+        body.provider,
     )
 
-    await enqueue_ai_job(job.id, "text_to_video")
+    try:
+        job = await create_ai_job(
+            db=db,
+            user_id=user.id,
+            job_type="text_to_video",
+            input_data={
+                "prompt": body.prompt,
+                "duration": body.duration,
+                "aspect_ratio": body.aspect_ratio,
+                "style": body.style,
+                "provider": body.provider,
+                "action": body.action,
+                "source_job_id": body.source_job_id,
+            },
+            project_id=body.project_id,
+            provider=body.provider,
+        )
 
-    return AIJobResponse(
-        job_id=job.id,
-        status=job.status,
-        job_type=job.job_type,
-        progress=job.progress,
-    )
+        queued = await enqueue_ai_job(job.id, "text_to_video")
+
+        response = AIJobResponse(
+            job_id=job.id,
+            status=job.status,
+            job_type=job.job_type,
+            progress=job.progress,
+        )
+        if not queued:
+            logger.warning("text_to_video job created but queue unavailable: %s", job.id)
+        return response
+    except Exception as exc:
+        logger.error("ai.video.text_to_video failed: %s", exc, exc_info=True)
+        raise
 
 
 @router.post("/api/ai/video/image-to-video", response_model=AIJobResponse)
+@router.post("/ai/video/image-to-video", response_model=AIJobResponse)
 async def image_to_video(
     body: ImageToVideoRequest,
     request: Request,
@@ -154,6 +195,7 @@ async def image_to_video(
 
 
 @router.post("/api/ai/video/script-to-scenes")
+@router.post("/ai/video/script-to-scenes")
 async def script_to_scenes(
     body: ScriptToScenesRequest,
     request: Request,
@@ -178,6 +220,7 @@ async def script_to_scenes(
 
 
 @router.post("/api/ai/video/background-remove", response_model=AIJobResponse)
+@router.post("/ai/video/background-remove", response_model=AIJobResponse)
 async def background_remove(
     body: BackgroundRemoveRequest,
     request: Request,
@@ -212,6 +255,7 @@ async def background_remove(
 
 
 @router.post("/api/ai/video/upscale", response_model=AIJobResponse)
+@router.post("/ai/video/upscale", response_model=AIJobResponse)
 async def upscale(
     body: UpscaleRequest,
     request: Request,
@@ -246,6 +290,7 @@ async def upscale(
 
 
 @router.post("/api/ai/video/style-transfer", response_model=AIJobResponse)
+@router.post("/ai/video/style-transfer", response_model=AIJobResponse)
 async def style_transfer(
     body: StyleTransferRequest,
     request: Request,
@@ -279,6 +324,7 @@ async def style_transfer(
 
 
 @router.post("/api/ai/video/avatar", response_model=AIJobResponse)
+@router.post("/ai/video/avatar", response_model=AIJobResponse)
 async def generate_avatar(
     body: AIAvatarRequest,
     request: Request,
@@ -591,12 +637,12 @@ async def get_ai_job_status(
                     job.status = "completed"
                     job.progress = 1.0
                     job.output_data = {"output": upstream["output"]}
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     await db.commit()
                 elif upstream["status"] == "failed":
                     job.status = "failed"
                     job.error_message = upstream.get("error", "Unknown error")
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     await db.commit()
 
             elif job.provider == "google_veo":
@@ -607,7 +653,7 @@ async def get_ai_job_status(
                     job.status = "completed"
                     job.progress = 1.0
                     job.output_data = upstream
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     await db.commit()
 
             elif job.provider == "openai_sora":
@@ -618,7 +664,7 @@ async def get_ai_job_status(
                     job.status = "completed"
                     job.progress = 1.0
                     job.output_data = {"video_url": upstream.get("video_url")}
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     await db.commit()
 
             # openai and google_imagen image jobs complete synchronously in the

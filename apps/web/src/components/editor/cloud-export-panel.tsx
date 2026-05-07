@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useEditor } from "@/hooks/use-editor";
+import { startRender, getRenderStatus } from "@/lib/cloud-api";
 
 interface RenderJobResponse {
 	job_id?: string;
@@ -41,41 +42,40 @@ export function CloudExportPanel() {
 				settings: project.settings,
 			};
 
-			const response = await fetch("/api/render-motion", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					project_id: project.metadata.id,
-					timeline_data: timelineData,
-					format,
-					quality,
-					width: project.settings.canvasSize.width,
-					height: project.settings.canvasSize.height,
-					fps: project.settings.fps,
-				}),
+			const job = await startRender({
+				projectId: project.metadata.id,
+				timelineData,
+				format,
+				quality,
+				width: project.settings.canvasSize?.width,
+				height: project.settings.canvasSize?.height,
+				fps: project.settings.fps,
 			});
-
-			if (!response.ok) {
-				throw new Error(`Render failed: ${response.status}`);
-			}
-
-			const job: RenderJobResponse = await response.json();
 
 			setState("rendering");
 
-			// Simulate progress since we don't have SSE without the backend
-			let currentProgress = 0;
-			const progressTimer = setInterval(() => {
-				currentProgress = Math.min(100, currentProgress + 10);
-				setProgress(currentProgress);
-				if (currentProgress >= 100) {
-					clearInterval(progressTimer);
-					setState("completed");
-					setOutputUrl(job.output_url);
-				}
-			}, 500);
+			// Poll the render job for real progress
+			const pollTimer = setInterval(async () => {
+				try {
+					const status = await getRenderStatus({ jobId: job.job_id });
+					const pct = Math.round((status.progress ?? 0) * 100);
+					setProgress(pct);
 
-			cleanupRef.current = () => clearInterval(progressTimer);
+					if (status.status === "completed") {
+						clearInterval(pollTimer);
+						setState("completed");
+						setOutputUrl(status.output_url);
+					} else if (status.status === "failed") {
+						clearInterval(pollTimer);
+						setState("failed");
+						setErrorMessage(status.error_message ?? "Render failed");
+					}
+				} catch {
+					// Retry on transient errors
+				}
+			}, 3000);
+
+			cleanupRef.current = () => clearInterval(pollTimer);
 		} catch (error) {
 			setState("failed");
 			setErrorMessage(

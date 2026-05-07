@@ -853,9 +853,7 @@ export async function executeToolCall(
 				const jobData = (await response.json()) as Record<string, string>;
 
 				// Add to image-gen store so it appears in the AI Image gallery
-				const { useImageGenStore } = await import(
-					"@/stores/image-gen-store"
-				);
+				const { useImageGenStore } = await import("@/stores/image-gen-store");
 				useImageGenStore.getState().addImage({
 					id: crypto.randomUUID(),
 					prompt,
@@ -880,33 +878,56 @@ export async function executeToolCall(
 				const prompt = args.prompt as string;
 				const duration = (args.duration as number) ?? 4;
 				const aspectRatio = (args.aspectRatio as string) ?? "16:9";
-				const provider = (args.provider as string) ?? "google_veo";
+				const provider = (args.provider as string) ?? "replicate";
+				const action = (args.action as string) ?? "preview";
+				const sourceJobId = args.sourceJobId as string | undefined;
 
-				const response = await apiFetch("/api/ai/video/text-to-video", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						prompt,
-						duration,
-						aspect_ratio: aspectRatio,
-						provider,
-					}),
-				});
+				let response: Response;
+				try {
+					response = await apiFetch("/api/ai/video/text-to-video", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							prompt,
+							duration,
+							aspect_ratio: aspectRatio,
+							provider,
+							action,
+							source_job_id: sourceJobId,
+						}),
+					});
+				} catch (fetchError) {
+					return {
+						success: false,
+						result: `Video generation failed: Cannot reach backend at ${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}. Ensure the FastAPI server is running (python -m uvicorn app.main:app --reload --port 8000).`,
+						description: "Generating video",
+					};
+				}
 
 				if (!response.ok) {
 					const err = await response.json().catch(() => ({}));
 					return {
 						success: false,
-						result: `Video generation failed: ${(err as Record<string, string>).detail || "Unknown error"}`,
+						result: `Video generation failed (${response.status}): ${(err as Record<string, string>).detail || JSON.stringify(err) || "Unknown error"}`,
 						description: "Generating video",
 					};
 				}
 
 				const jobData = await response.json();
+				const jobId = (jobData as Record<string, string>).job_id;
+
+				if (action === "finalize") {
+					return {
+						success: true,
+						result: `Video finalization started. Job ID: ${jobId}. This assembles preview frames into a final video. Use poll_job_status to check when it's ready, then import_generated_asset to add it to the timeline.`,
+						description: "Finalizing video from preview frames",
+					};
+				}
+
 				return {
 					success: true,
-					result: `Video generation started via ${provider}. Job ID: ${(jobData as Record<string, string>).job_id}. This may take 1-2 minutes. Use poll_job_status to check when it's ready, then import_generated_asset to add it to the timeline.`,
-					description: `Generating video: "${prompt.slice(0, 40)}..."`,
+					result: `Video preview generation started via ${provider}. Job ID: ${jobId}. This may take 1-2 minutes. Use poll_job_status to check when preview frames are ready (status will be 'preview_ready'). When ready, the frames will automatically appear in the AI Image gallery panel. Ask the user to review them and confirm before calling generate_video again with action 'finalize' and sourceJobId '${jobId}'.`,
+					description: `Generating video preview: "${prompt.slice(0, 40)}..."`,
 				};
 			}
 
@@ -1008,7 +1029,7 @@ export async function executeToolCall(
 			// ── Job Polling ──
 			case "poll_job_status": {
 				const jobId = args.jobId as string;
-				const response = await apiFetch(`/api/ai/video/status/${jobId}`);
+				const response = await apiFetch(`/api/ai/jobs/${jobId}`);
 
 				if (!response.ok) {
 					return {
@@ -1021,20 +1042,77 @@ export async function executeToolCall(
 				const statusData = (await response.json()) as Record<string, unknown>;
 				const status = statusData.status as string;
 				const progress = (statusData.progress as number) ?? 0;
-				const resultUrl = statusData.result_url as string | undefined;
+				const outputData = statusData.output_data as Record<string, unknown> | null;
+				const outputUrl = (statusData.output_url as string | undefined)
+					?? (outputData?.final_video_url as string | undefined)
+					?? (outputData?.audio_url as string | undefined);
 
-				if (status === "completed" && resultUrl) {
+				if (status === "preview_ready" && outputData) {
+					const previewFrames = (outputData.preview_frames ?? []) as Array<{
+						id: string;
+						index: number;
+						image_url?: string;
+						output_url?: string;
+						prompt?: string;
+					}>;
+					const frameUrls = previewFrames
+						.map((frame) => frame.image_url ?? frame.output_url)
+						.filter(Boolean) as string[];
+
+					// Add preview frames to the AI Image gallery so user can see them
+					const { useImageGenStore } = await import("@/stores/image-gen-store");
+					const store = useImageGenStore.getState();
+					for (const frame of previewFrames) {
+						const frameUrl = frame.image_url ?? frame.output_url;
+						if (frameUrl) {
+							store.addImage({
+								id: `preview-${jobId}-${frame.index}`,
+								prompt: frame.prompt ?? `Video preview frame ${frame.index}`,
+								provider: (outputData.provider as "replicate" | "google_imagen" | "openai") ?? "replicate",
+								status: "completed",
+								urls: [frameUrl],
+								jobId,
+								parentImageId: null,
+								errorMessage: null,
+								createdAt: Date.now(),
+							});
+						}
+					}
+
 					return {
 						success: true,
-						result: `Job ${jobId} completed! Result URL: ${resultUrl}. Use import_generated_asset to add it to the timeline.`,
+						result: `Job ${jobId} has ${frameUrls.length} preview frames ready! The frames are now visible in the AI Image gallery panel. Please ask the user to review the preview frames and confirm before finalizing. Once they confirm, call generate_video with action 'finalize' and sourceJobId '${jobId}' to create the final video.`,
+						description: "Preview frames ready — shown in gallery",
+					};
+				}
+
+				if (status === "completed") {
+					// Extract usable URLs from output_data
+					const imageUrls = (outputData?.image_urls ?? []) as string[];
+					const resultUrl = outputUrl ?? imageUrls[0];
+
+					if (resultUrl) {
+						return {
+							success: true,
+							result: `Job ${jobId} completed! Result URL: ${resultUrl}. Use import_generated_asset to add it to the timeline.`,
+							description: "Job completed",
+						};
+					}
+
+					return {
+						success: true,
+						result: `Job ${jobId} completed! Output: ${JSON.stringify(outputData).slice(0, 500)}`,
 						description: "Job completed",
 					};
 				}
 
 				if (status === "failed") {
+					const errorMsg = (statusData.error_message as string)
+						?? (statusData.error as string)
+						?? "Unknown error";
 					return {
 						success: false,
-						result: `Job ${jobId} failed: ${(statusData.error as string) || "Unknown error"}`,
+						result: `Job ${jobId} failed: ${errorMsg}`,
 						description: "Job failed",
 					};
 				}
@@ -1125,7 +1203,11 @@ export async function executeToolCall(
 				const assetsBefore = editor.media.getAssets().length;
 				await editor.media.addMediaAsset({
 					projectId,
-					asset: { file, name, type: assetType === "video" ? "video" : "image" },
+					asset: {
+						file,
+						name,
+						type: assetType === "video" ? "video" : "image",
+					},
 				});
 				const assetsAfter = editor.media.getAssets();
 				const newAsset = assetsAfter[assetsAfter.length - 1];
@@ -1151,7 +1233,9 @@ export async function executeToolCall(
 						mediaId: newAsset.id,
 						startTime,
 						duration:
-							assetType === "video" ? (newAsset.duration ?? duration) : duration,
+							assetType === "video"
+								? (newAsset.duration ?? duration)
+								: duration,
 						name,
 						trimStart: 0,
 						trimEnd: 0,
@@ -1441,18 +1525,19 @@ export async function executeToolCall(
 					};
 				}
 
-				const response = await apiFetch(
-					`/api/agent/execute/${projectId || "default"}`,
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							query,
-							context,
-							media_asset_ids: mediaAssetIds,
-						}),
-					},
-				);
+				if (!projectId) {
+					throw new Error("projectId is required for agent execution");
+				}
+
+				const response = await apiFetch(`/api/agent/execute/${projectId}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						query,
+						context,
+						media_asset_ids: mediaAssetIds,
+					}),
+				});
 
 				if (!response.ok) {
 					const err = await response.json().catch(() => ({}));

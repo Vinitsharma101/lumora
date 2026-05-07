@@ -723,6 +723,10 @@ export async function startAgentSession({
 	context?: Record<string, unknown>;
 	mediaAssetIds?: string[];
 }): Promise<{ session_id: string; status: string }> {
+	if (!projectId) {
+		throw new Error("projectId is required to start an agent session");
+	}
+
 	const response = await apiFetch(`/api/agent/execute/${projectId}`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },

@@ -25,7 +25,7 @@ async def create_render_job(
     fps: int = 30,
 ) -> RenderJob:
     """Create a render job record and enqueue it."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     job = RenderJob(
         id=str(uuid4()),
         project_id=project_id,
@@ -84,6 +84,6 @@ async def update_render_progress(
     if error_message:
         job.error_message = error_message
     if status in ("completed", "failed"):
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     await db.commit()

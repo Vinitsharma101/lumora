@@ -10,6 +10,7 @@ export interface ToolCallStatus {
 	name: string;
 	description: string;
 	status: "pending" | "executing" | "success" | "error";
+	arguments?: Record<string, unknown>;
 	result?: string;
 	error?: string;
 }

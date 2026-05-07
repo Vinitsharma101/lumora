@@ -90,6 +90,8 @@ def _to_openai_messages(messages: list[AIMessage], system_prompt: str) -> list[d
                     "tool_call_id": tr.toolCallId,
                     "content": tr.content,
                 })
+            if msg.content:
+                result.append({"role": "user", "content": msg.content})
             continue
 
         if msg.role == "assistant" and msg.toolCalls:

@@ -127,8 +127,8 @@ class AgentOrchestrator:
                     review_notes=[],
                     messages=[],
                     error=None,
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 db.add(session_model)
                 await db.commit()
@@ -221,7 +221,7 @@ class AgentOrchestrator:
                 model.error = self.state.get("error")
                 model.acts_progress = self.state.get("acts_progress", {})
                 model.cost_estimate = self.state.get("cost_estimate", {})
-                model.updated_at = datetime.now(timezone.utc)
+                model.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 await db.commit()
 
         # Cache status snapshot in Redis for SSE streaming

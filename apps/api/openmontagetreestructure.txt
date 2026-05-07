@@ -1,0 +1,309 @@
+OpenMontage Project Guide
+=========================
+
+This document explains the OpenMontage project in simple English so the full tree is easier to understand.
+
+1. What OpenMontage Is
+
+OpenMontage is a video production system.
+It does not just render a video.
+It works in stages:
+
+- plan the video
+- create the media assets
+- compose the scenes
+- render the final output
+- publish or export the result
+
+The main idea is:
+
+idea -> pipeline -> scenes/assets -> composition -> render -> publish
+
+2. Main Folders
+
+### `.agents/`
+- Instructions and skill notes for AI agents.
+- Helps the AI understand how to build videos.
+
+### `.claude/`, `.cursor/`, `.github/`
+- Developer and automation config.
+- These help with workflow, but they are not the video engine.
+
+### `assets/`
+- Sample media.
+- Logos, preview images, example clips.
+
+### `docs/`
+- Human-readable documentation.
+- Architecture notes, provider notes, and stage guidance.
+
+### `lib/`
+- Shared core logic.
+- Loads pipeline definitions, builds prompts, scores outputs, and handles config.
+
+### `pipeline_defs/`
+- YAML files that define video workflows.
+- Example types: explainer, cinematic, talking-head, hybrid.
+
+### `remotion-composer/`
+- The final visual renderer.
+- Contains React + Remotion code that turns structured data into video frames.
+
+### `schemas/`
+- Validation rules for pipeline data.
+- Protects the system from malformed input/output.
+
+### `skills/`
+- Step-by-step instructions for agents and humans.
+- Covers core video concepts and pipeline stages.
+
+### `styles/`
+- Theme and style presets.
+- Controls the look and feel of generated videos.
+
+### `tests/`
+- Validation and QA.
+- Checks that pipeline output and rendering still work.
+
+### `tools/`
+- Execution helpers.
+- Includes audio, video, graphics, analysis, and capture utilities.
+
+3. How the System Works
+
+OpenMontage uses a pipeline instead of one giant render script.
+
+### Stage 1: Planning
+Files involved:
+- `pipeline_defs/*`
+- `skills/pipelines/*`
+- `lib/pipeline_loader.py`
+- `lib/playbook_generator.py`
+
+What happens:
+- choose the video type
+- define the structure
+- decide scenes, pacing, tone, and output style
+
+### Stage 2: Asset Creation
+Files involved:
+- `tools/video/*`
+- `tools/audio/*`
+- `tools/graphics/*`
+- `tools/analysis/*`
+
+What happens:
+- create or collect media
+- analyze the source material
+- prepare narration, captions, overlays, and clips
+
+### Stage 3: Composition
+Files involved:
+- `remotion-composer/src/Root.tsx`
+- `remotion-composer/src/index.tsx`
+- `remotion-composer/src/*.tsx`
+- `remotion-composer/src/components/*`
+
+What happens:
+- map structured data into visual scenes
+- pass props into animated React components
+- calculate timing, duration, and layout
+
+### Stage 4: Rendering
+Files involved:
+- `tools/video/video_compose.py`
+- `tools/video/remotion_caption_burn.py`
+- `remotion-composer/`
+
+What happens:
+- bundle the Remotion app
+- select the composition
+- pass the props
+- render frames into the final video
+
+### Stage 5: Output / Publishing
+Files involved:
+- `docs/`
+- `tests/`
+- export-related tooling
+
+What happens:
+- store the output
+- create metadata
+- package the result for delivery
+
+4. Remotion Composer Details
+
+This is the most important rendering folder.
+
+### `src/index.tsx`
+- Remotion entry point.
+- Registers the root composition app.
+
+### `src/Root.tsx`
+- Registers all available compositions.
+- Each composition gets default props and timing.
+
+### Composition files
+Examples:
+- `Explainer.tsx`
+- `TalkingHead.tsx`
+- `CinematicRenderer.tsx`
+- `TitledVideo.tsx`
+
+These files:
+- receive props
+- render the actual visuals
+- use Remotion timing APIs
+
+### `src/components/`
+- Reusable building blocks.
+- Title cards, captions, charts, overlays, and stat blocks.
+
+Why this matters:
+- keeps the code modular
+- avoids repeating animation logic
+
+5. Pipeline Definitions
+
+The YAML files in `pipeline_defs/` tell the system what kind of video to make.
+
+They usually define:
+- stage order
+- required inputs
+- output expectations
+- which branch of the pipeline to run
+
+6. Pipeline Skills
+
+The files in `skills/pipelines/` explain how each stage should behave.
+
+Typical stages:
+- idea-director
+- scene-director
+- asset-director
+- compose-director
+- edit-director
+- publish-director
+
+What they do:
+- describe the job of each stage
+- define quality rules
+- explain what should exist before rendering
+
+Important note:
+- `compose-director` is where final rendering expectations are usually defined.
+
+7. Tools Folder
+
+These are the execution helpers.
+
+Important files:
+- `video_compose.py` — main composition/render path
+- `video_stitch.py` — combines clips
+- `video_trimmer.py` — trims clips
+- `remotion_caption_burn.py` — burns captions
+- `video_selector.py` — chooses the right video tool
+
+What they do:
+- process media
+- connect pipeline output to final render actions
+
+8. Library Folder
+
+`lib/` is the brain of the system.
+
+Important helpers:
+- `pipeline_loader.py` — loads pipeline definitions
+- `config_model.py` — structured config objects
+- `playbook_generator.py` — turns strategy into a plan
+- `shot_prompt_builder.py` — builds scene prompts
+- `scoring.py` — validates or scores outputs
+
+These helpers bridge:
+- idea -> structured plan
+- structured plan -> executable assets
+
+9. Schemas Folder
+
+Schemas protect the pipeline from bad data.
+
+They validate things like:
+- brief
+- script
+- scene plan
+- render report
+- asset manifest
+
+Why they matter:
+- fail fast when data is invalid
+- make debugging easier
+- keep output reproducible
+
+10. Tests Folder
+
+Tests cover:
+- contracts
+- QA
+- pipeline behavior
+- rendering expectations
+
+Why they matter:
+- catch broken assumptions early
+- confirm the render path still works
+
+11. How Remotion Is Used
+
+OpenMontage uses Remotion as the final composition engine.
+
+General flow:
+1. pipeline creates scene and asset data
+2. props are mapped to a Remotion composition
+3. `Root.tsx` registers available compositions
+4. the renderer selects the needed composition
+5. Remotion renders frames and exports the video
+
+Important concept:
+- Remotion is not the whole pipeline
+- it is the final visual rendering layer
+
+12. Why the System Is Built This Way
+
+Reasons:
+- predictable output
+- reusable components
+- easier validation
+- easier to extend with new video types
+- safer than a single huge script
+
+13. Best Files to Learn First
+
+If you want to understand the system quickly, start here:
+1. `remotion-composer/src/Root.tsx`
+2. `remotion-composer/src/index.tsx`
+3. `skills/core/remotion.md`
+4. `skills/pipelines/*/compose-director.md`
+5. `tools/video/video_compose.py`
+6. `lib/pipeline_loader.py`
+7. `pipeline_defs/*.yaml`
+
+14. What This Means for Grace Studio
+
+When using this structure in Grace Studio, focus on:
+- one clear composition registry
+- one render contract for props and timing
+- structured pipeline stages
+- validation before rendering
+- a clean handoff from pipeline data to the renderer
+
+15. Simple Mental Model
+
+Think of it like this:
+
+- `pipeline_defs` = what to make
+- `skills/pipelines` = how to think about making it
+- `lib/` = shared logic
+- `tools/` = execution
+- `remotion-composer/` = frame generation
+
+That is the core structure.

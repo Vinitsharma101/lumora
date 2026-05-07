@@ -472,7 +472,7 @@ export const AI_TOOLS: ToolDefinition[] = [
 	{
 		name: "generate_video",
 		description:
-			"Generate a video clip from a text description using AI models (Google Veo, Replicate, or OpenAI Sora) and add it to the timeline.",
+			"Generate a video clip from a text description using AI models. First call with action 'preview' to generate preview frames. Once preview_ready, show the frames to the user, then call again with action 'finalize' and the sourceJobId to create the final video.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -491,8 +491,19 @@ export const AI_TOOLS: ToolDefinition[] = [
 				},
 				provider: {
 					type: "string",
-					enum: ["google_veo", "replicate", "openai_sora"],
+					enum: ["google_veo", "replicate", "openai_sora", "luma"],
 					description: "AI provider to use (default: google_veo)",
+				},
+				action: {
+					type: "string",
+					enum: ["preview", "finalize"],
+					description:
+						"'preview' generates preview frames first (default). 'finalize' assembles frames into final video (requires sourceJobId).",
+				},
+				sourceJobId: {
+					type: "string",
+					description:
+						"Job ID of the preview job to finalize. Required when action is 'finalize'.",
 				},
 				startTime: {
 					type: "number",
@@ -588,7 +599,7 @@ export const AI_TOOLS: ToolDefinition[] = [
 	{
 		name: "poll_job_status",
 		description:
-			"Poll the status of an async generation job (image, video, speech, SFX). Returns status, progress percentage, and result URL when complete. Use after generate_image, generate_video, transform_video, generate_speech, or generate_sound_effect.",
+			"Poll the status of an async generation job (image, video, speech, SFX). Returns status, progress percentage, and result URL when complete. For video jobs, status will be 'preview_ready' with preview_frames before 'completed'. Use after generate_image, generate_video, transform_video, generate_speech, or generate_sound_effect.",
 		parameters: {
 			type: "object",
 			properties: {

@@ -76,7 +76,7 @@ async def upload_media(
         height=height,
         duration=duration,
         fps=fps,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     db.add(asset)

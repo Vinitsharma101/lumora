@@ -93,6 +93,8 @@ def _to_anthropic_messages(messages: list[AIMessage]) -> list[dict]:
                 }
                 for tr in msg.toolResults
             ]
+            if msg.content:
+                content.append({"type": "text", "text": msg.content})
             result.append({"role": "user", "content": content})
             continue
 

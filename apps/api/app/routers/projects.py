@@ -30,7 +30,7 @@ async def create_project(
 ):
     await check_rate_limit(request)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     project = Project(
         id=str(uuid4()),
         user_id=user.id,
@@ -133,7 +133,7 @@ async def update_project(
     for field, value in update_data.items():
         setattr(project, field, value)
 
-    project.updated_at = datetime.now(timezone.utc)
+    project.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     await db.refresh(project)
     return project
@@ -192,7 +192,7 @@ async def duplicate_project(
     if not original:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     duplicate = Project(
         id=str(uuid4()),
         user_id=user.id,

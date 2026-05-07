@@ -48,7 +48,9 @@ async def _retry_frame_generation(factory, attempts: int = 3):
             last_error = exc
             logger.warning("Frame generation failed on attempt %s/%s: %s", attempt, attempts, exc)
             if attempt < attempts:
-                await asyncio.sleep(1.5 * attempt)
+                # Wait longer on rate-limit errors (429)
+                wait = 12 * attempt if "429" in str(exc) or "throttled" in str(exc).lower() else 2 * attempt
+                await asyncio.sleep(wait)
     raise RuntimeError(f"Frame generation failed after {attempts} attempts: {last_error}")
 
 
@@ -61,7 +63,9 @@ async def _generate_preview_frames(
     from app.services.ai_video.google_provider import GoogleAIProvider
     from app.services.ai_video.replicate_provider import ReplicateProvider
 
-    frame_count = max(1, min(duration, 60))
+    # Generate fewer frames to stay within rate limits
+    # 1 frame per 2 seconds of duration, max 5 frames for preview
+    frame_count = max(1, min((duration + 1) // 2, 5))
     frames: list[dict] = []
     previous_prompt: str | None = None
     logger.info("Generating %s preview frames via %s", frame_count, provider_name)
@@ -71,12 +75,25 @@ async def _generate_preview_frames(
 
         if provider_name == "google_veo":
             provider = GoogleAIProvider()
-            result = await _retry_frame_generation(lambda: provider.generate_image(prompt=frame_prompt, aspect_ratio="16:9", count=1))
+            # Capture prompt by value to avoid closure-over-loop-variable bug
+            _prompt = frame_prompt
+            result = await _retry_frame_generation(lambda _p=_prompt: provider.generate_image(prompt=_p, aspect_ratio="16:9", count=1))
             predictions = result.get("predictions", [])
             image_url = None
             if predictions:
                 first = predictions[0]
-                image_url = first.get("imageUrl") or first.get("url") or first.get("bytesBase64Encoded")
+                # Google Imagen returns base64 — upload to storage to get a real URL
+                b64_data = first.get("bytesBase64Encoded")
+                if b64_data and settings.SUPABASE_URL and settings.SUPABASE_SERVICE_KEY:
+                    import base64 as b64mod
+                    from app.services.storage_service import upload_bytes as _upload
+                    img_bytes = b64mod.b64decode(b64_data)
+                    image_url = await _upload(img_bytes, "png", "image/png", prefix="ai_preview_frame")
+                elif b64_data:
+                    # No storage configured — use data URI for display
+                    image_url = f"data:image/png;base64,{b64_data}"
+                else:
+                    image_url = first.get("imageUrl") or first.get("url")
             frames.append({
                 "id": f"frame-{index + 1:03d}",
                 "index": index + 1,
@@ -90,14 +107,26 @@ async def _generate_preview_frames(
             logger.info("Generated preview frame %s/%s from Google", index + 1, frame_count)
         else:
             provider = ReplicateProvider()
-            result = await _retry_frame_generation(lambda: provider.text_to_image(prompt=frame_prompt, width=1024, height=1024, model="schnell", wait=True))
+            # Capture prompt by value to avoid closure-over-loop-variable bug
+            _prompt = frame_prompt
+            result = await _retry_frame_generation(lambda _p=_prompt: provider.text_to_image(prompt=_p, width=1024, height=1024, model="schnell", wait=True))
+            image_url = result.get("output_url")
+            # Replicate URLs expire — upload to our storage for persistence (if Supabase configured)
+            if image_url and settings.SUPABASE_URL and settings.SUPABASE_SERVICE_KEY:
+                from app.services.storage_service import upload_from_url as _upload_url
+                try:
+                    image_url = await _upload_url(image_url, "png", "image/png", prefix="ai_preview_frame")
+                except Exception as exc:
+                    logger.warning("Failed to re-upload Replicate frame, using original URL: %s", exc)
+                    image_url = result.get("output_url")
             frames.append({
                 "id": f"frame-{index + 1:03d}",
                 "index": index + 1,
                 "prompt": frame_prompt,
                 "provider": result.get("provider", "replicate"),
                 "prediction_id": result.get("prediction_id"),
-                "output_url": result.get("output_url"),
+                "image_url": image_url,
+                "output_url": image_url,
                 "output": result.get("output"),
                 "status": result.get("status", "completed"),
                 "error": None,
@@ -106,10 +135,14 @@ async def _generate_preview_frames(
 
         previous_prompt = frame_prompt
 
+        # Respect rate limits — wait between frames to avoid 429s
+        if index < frame_count - 1:
+            await asyncio.sleep(10)
+
     return frames
 
 
-async def _frames_to_video(frame_urls: list[str], fps: int = 24) -> str:
+async def _frames_to_video(frame_urls: list[str], fps: int = 24, total_duration: float | None = None) -> str:
     if not frame_urls:
         raise ValueError("No preview frames available")
 
@@ -134,12 +167,16 @@ async def _frames_to_video(frame_urls: list[str], fps: int = 24) -> str:
             if not local_frames:
                 raise ValueError("Unable to download preview frames")
 
+        # Each frame should last total_duration / frame_count seconds
+        # so the final video matches the user's requested duration
+        frame_duration = (total_duration / len(local_frames)) if total_duration else 1.0
+
         concat_path = os.path.join(tmpdir, "frames.txt")
         with open(concat_path, "w", encoding="utf-8") as f:
             for frame_path in local_frames:
                 normalized = frame_path.replace("\\", "/")
                 f.write(f"file '{normalized}'\n")
-                f.write(f"duration {1 / fps:.6f}\n")
+                f.write(f"duration {frame_duration:.6f}\n")
             last_normalized = local_frames[-1].replace("\\", "/")
             f.write(f"file '{last_normalized}'\n")
 
@@ -204,10 +241,18 @@ async def enqueue_render_job(job_id: str) -> None:
     await pool.enqueue_job("process_render_job", job_id)
 
 
-async def enqueue_ai_job(job_id: str, job_type: str) -> None:
-    """Enqueue an AI processing job."""
-    pool = await get_arq_pool()
-    await pool.enqueue_job("process_ai_job", job_id, job_type)
+async def enqueue_ai_job(job_id: str, job_type: str) -> bool:
+    """Enqueue an AI processing job.
+
+    Returns False when Redis/ARQ is unavailable so API routes can still respond.
+    """
+    try:
+        pool = await get_arq_pool()
+        await pool.enqueue_job("process_ai_job", job_id, job_type)
+        return True
+    except Exception as exc:
+        logger.warning("Failed to enqueue AI job %s (%s): %s", job_id, job_type, exc)
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +384,8 @@ async def process_ai_job(ctx: dict, job_id: str, job_type: str) -> dict:
                         raise RuntimeError("Stored preview frames are missing URLs")
 
                     await update_job_status(db, job_id, "processing", 0.5, output_data=output_data)
-                    final_video_url = await _frames_to_video(frame_urls, fps=24)
+                    total_duration = output_data.get("duration") or input_data.get("duration") or duration
+                    final_video_url = await _frames_to_video(frame_urls, fps=24, total_duration=float(total_duration))
                     logger.info("AI job %s finalized video url=%s", job_id, final_video_url)
                     completed_output = {
                         **output_data,
@@ -1453,7 +1499,29 @@ async def process_movie_assembly(ctx: dict, session_id: str) -> dict:
                 project.settings = settings
                 project.duration = master_timeline["total_duration"]
                 await db.commit()
-    
+
+                # Enqueue a render job so the final video file is actually produced
+                from app.services.render.scheduler import create_render_job
+
+                try:
+                    async with async_session_factory() as render_db:
+                        render_job = await create_render_job(
+                            db=render_db,
+                            user_id=project.user_id,
+                            project_id=orchestrator.project_id,
+                            timeline_data=master_timeline,
+                            format="mp4",
+                            quality="high",
+                            width=canvas_width,
+                            height=canvas_height,
+                            fps=master_timeline.get("fps", 24),
+                        )
+                        orchestrator.state["render_job_id"] = render_job.id
+                        await orchestrator.save_state()
+                        logger.info("Enqueued render job %s for movie assembly", render_job.id)
+                except Exception as e:
+                    logger.error("Failed to enqueue render after movie assembly: %s", e)
+
     return {"status": "movie_assembly_complete"}
 
 

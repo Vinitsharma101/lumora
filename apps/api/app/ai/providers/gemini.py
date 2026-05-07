@@ -85,6 +85,8 @@ def _to_gemini_contents(messages: list[AIMessage]) -> list[types.Content]:
                         response={"result": tr.content},
                     )
                 )
+            if msg.content:
+                parts.append(types.Part.from_text(text=msg.content))
             contents.append(types.Content(role="user", parts=parts))
             continue
 
