@@ -1,20 +1,3 @@
-<table width="100%">
-  <tr>
-    <td align="left" width="120">
-      <img src="apps/web/public/logos/grace-studio/1k/logo-white-black.png" alt="Grace Studio Logo" width="100" />
-    </td>
-    <td align="right">
-      <h1>Grace Studio</h1>
-      <h3 style="margin-top: -10px;">An agentic video editing platform powered by AI.</h3>
-    </td>
-  </tr>
-</table>
-
-## Why?
-
-- **Privacy**: Your videos stay on your device
-- **AI-powered**: Agentic pipeline handles complex edits autonomously
-- **Simple**: Professional editing that's easy to use
 
 ## Features
 
